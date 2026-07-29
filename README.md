@@ -1,4 +1,4 @@
-LoRa APRS Terminal for Waveshare ESP32 Touch LCD 3.5"
+<h1>LoRa APRS Terminal for Waveshare ESP32 Touch LCD 3.5"</h1>
 
 A touchscreen LoRa APRS terminal built for the Waveshare ESP32 Touch LCD 3.5" board and an external RA-02 / SX1278 433 MHz LoRa module.
 
@@ -6,7 +6,7 @@ The terminal can receive, decode, display and transmit APRS packets over a LoRa 
 
 Created by OK5TVR
 
-Main features
+<h2>Main features</h2>
 reception and display of LoRa APRS packets,
 list of the latest 15 unique stations, objects and items,
 decoding of standard, compressed and Mic-E positions,
@@ -33,7 +33,7 @@ editable callsign and default position,
 Wi-Fi and APRS-IS configuration,
 persistent configuration stored in ESP32 NVS,
 status indicators for GPS, messages, new stations, tracker, digipeater and iGate.
-Supported hardware
+<h2>Supported hardware</h2>
 Waveshare ESP32 Touch LCD 3.5",
 ESP32-D0WDR2-V3,
 ST7796 480 × 320 display,
@@ -41,7 +41,7 @@ FT6336 capacitive touchscreen,
 RA-02 / SX1278 433 MHz LoRa module,
 optional NMEA GPS receiver,
 optional microSD card.
-Default LoRa configuration
+<h2>Default LoRa configuration</h2>
 Frequency:        433.775 MHz
 Bandwidth:        125 kHz
 Spreading factor: SF12
@@ -51,7 +51,7 @@ Preamble:         8 symbols
 TX power:         10 dBm
 Payload CRC:      disabled
 Explicit header:  enabled
-RA-02 wiring
+<h2>RA-02 wiring</h2>
 RA-02	ESP32
 VCC	3.3 V
 GND	GND
@@ -62,7 +62,7 @@ NSS / CS	GPIO33
 RESET	GPIO32
 DIO0	GPIO4
 
-Optional GPS receiver:
+<h2>Optional GPS receiver:</h2>
 
 GPS	ESP32
 TX	GPIO17
@@ -71,7 +71,7 @@ VCC	according to the GPS module
 
 The GPS serial output must use a maximum logic level of 3.3 V.
 
-APRS tracker
+<h2>APRS tracker</h2>
 
 The integrated tracker supports:
 
@@ -84,7 +84,7 @@ manual beacon transmission using the BOOT button.
 
 The tracker can operate independently from the periodic beacon function. A single position packet can therefore be transmitted using the BOOT button even when automatic tracking is disabled.
 
-Digipeater
+<h2>Digipeater</h2>
 
 The digipeater supports:
 
@@ -102,7 +102,7 @@ Example:
 Received:
 OK1ABC>APRS,WIDE1-1,WIDE2-1:...
 
-Repeated:
+<h2>Repeated:</h2>
 OK1ABC>APRS,OK5TVR-17*,WIDE2-1:...
 Receive-only iGate
 
@@ -125,7 +125,7 @@ APRS messaging
 
 The terminal can send and receive APRS text messages.
 
-Supported functions include:
+<h2>Supported functions include:</h2>
 
 touchscreen recipient and message entry,
 automatic message identifiers,
@@ -136,7 +136,7 @@ duplicate message detection,
 unread-message indicator.
 GPS diagnostics
 
-The GPS page displays:
+<h2>The GPS page displays:</h2>
 
 UART data activity,
 detected NMEA sentence type,
@@ -160,27 +160,10 @@ Course:   064° ENE
 Building the firmware
 
 The project uses PlatformIO.
-
-Build:
-
-pio run -e waveshare-esp32-release
-
-Upload:
-
-pio run -e waveshare-esp32-release -t upload
-
-Serial monitor:
-
-pio device monitor -b 115200
-
-Clean build:
-
-Remove-Item -Recurse -Force .pio
-pio run -e waveshare-esp32-release
 Project status
 
 The project is under active development. Hardware testing is recommended after every firmware update, especially for radio, GPS, Wi-Fi and touchscreen functions.
 
-Disclaimer
+<h2>Disclaimer</h2>
 
 This project is intended for experimental amateur radio use. The operator is responsible for complying with local radio regulations, licence conditions, permitted frequencies, transmission power limits and local APRS network policies.
