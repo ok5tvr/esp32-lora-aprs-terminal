@@ -1,0 +1,373 @@
+#include "ui/screen_manager.h"
+
+#include <Arduino.h>
+
+#include "app/menu_model.h"
+#include "app_config.h"
+#include "ui/screens/digi_igate_screen.h"
+#include "ui/screens/gps_screen.h"
+#include "ui/screens/lora_screen.h"
+#include "ui/screens/menu_screen.h"
+#include "ui/screens/messages_screen.h"
+#include "ui/screens/placeholder_screen.h"
+#include "ui/screens/settings_screen.h"
+#include "ui/screens/splash_screen.h"
+#include "ui/screens/stations_screen.h"
+#include "ui/screens/tracker_screen.h"
+#include "ui/screens/weather_screen.h"
+#include "ui/ui_components.h"
+#include "ui/ui_styles.h"
+
+namespace Ui {
+namespace {
+
+void addNotificationCount(std::uint8_t& count, std::uint32_t delta) {
+    const std::uint32_t sum = static_cast<std::uint32_t>(count) + delta;
+    count = static_cast<std::uint8_t>(sum > 99U ? 99U : sum);
+}
+
+MenuScreen::IndicatorState makeMenuIndicators(
+    const Services::GpsService::ViewState& gps,
+    const Services::TrackerService::ViewState& tracker,
+    const Services::DigiIgateService::ViewState& digiIgate,
+    std::uint8_t unreadMessages,
+    std::uint8_t newStations) {
+
+    MenuScreen::IndicatorState state;
+    state.gpsSerialTraffic = gps.serialTrafficDetected;
+    state.gpsNmeaPacket = gps.nmeaPacketDetected;
+    state.gpsReceiverDetected = gps.receiverDetected;
+    state.gpsFix = gps.hasFix;
+    state.trackerConfigured = tracker.configuredEnabled;
+    state.trackerActive = tracker.active;
+    state.digiEnabled = digiIgate.digiEnabled;
+    state.igateEnabled = digiIgate.igateEnabled;
+    state.igateVerified = digiIgate.aprsIsVerified;
+    state.unreadMessages = unreadMessages;
+    state.newStations = newStations;
+    return state;
+}
+
+}  // namespace
+
+void ScreenManager::begin(
+    App::CommandHandler commandHandler,
+    void* commandContext,
+    App::MessageSendHandler messageSendHandler,
+    void* messageSendContext,
+    App::SettingsSaveHandler settingsSaveHandler,
+    void* settingsSaveContext,
+    App::DigiIgateSettingsSaveHandler digiIgateSaveHandler,
+    void* digiIgateSaveContext,
+    App::TrackerSettingsSaveHandler trackerSaveHandler,
+    void* trackerSaveContext) {
+
+    commandHandler_ = commandHandler;
+    commandContext_ = commandContext;
+    messageSendHandler_ = messageSendHandler;
+    messageSendContext_ = messageSendContext;
+    settingsSaveHandler_ = settingsSaveHandler;
+    settingsSaveContext_ = settingsSaveContext;
+    digiIgateSaveHandler_ = digiIgateSaveHandler;
+    digiIgateSaveContext_ = digiIgateSaveContext;
+    trackerSaveHandler_ = trackerSaveHandler;
+    trackerSaveContext_ = trackerSaveContext;
+    observedMessageEvents_ = 0;
+    observedStationEvents_ = 0;
+    unreadMessageCount_ = 0;
+    newStationCount_ = 0;
+    Styles::begin();
+    currentScreen_ = App::ScreenId::Splash;
+    SplashScreen::create();
+}
+
+void ScreenManager::update(
+    std::uint32_t now,
+    const Services::RadioService::ViewState& radioState,
+    const Services::MessageStore::ViewState& messageState,
+    const Services::StationStore::ViewState& stationState,
+    const Services::WeatherStore::ViewState& weatherState,
+    const Services::GpsService::ViewState& gpsState,
+    const Services::TrackerService::ViewState& trackerState,
+    const Services::DigiIgateService::ViewState& digiIgateState,
+    const Services::PositionReference& reference,
+    const Services::SettingsService::ViewState& settingsState) {
+
+    settingsState_ = settingsState;
+    gpsState_ = gpsState;
+    trackerState_ = trackerState;
+    digiIgateState_ = digiIgateState;
+    referenceState_ = reference;
+
+    const std::uint32_t messageDelta =
+        messageState.receivedMessageEvents - observedMessageEvents_;
+    observedMessageEvents_ = messageState.receivedMessageEvents;
+    if (messageDelta > 0U) {
+        addNotificationCount(unreadMessageCount_, messageDelta);
+    }
+
+    const std::uint32_t stationDelta =
+        stationState.discoveredEntities - observedStationEvents_;
+    observedStationEvents_ = stationState.discoveredEntities;
+    if (stationDelta > 0U) {
+        addNotificationCount(newStationCount_, stationDelta);
+    }
+
+    if (currentScreen_ == App::ScreenId::Messages) {
+        unreadMessageCount_ = 0;
+    } else if (currentScreen_ == App::ScreenId::Stations) {
+        newStationCount_ = 0;
+    }
+
+    if (currentScreen_ == App::ScreenId::Settings) {
+        SettingsScreen::processPending();
+    } else if (currentScreen_ == App::ScreenId::DigiIgate) {
+        DigiIgateScreen::processPending();
+    } else if (currentScreen_ == App::ScreenId::Messages) {
+        MessagesScreen::processPending();
+    }
+
+    // Navigation is deliberately processed here, after lv_timer_handler() has
+    // returned. Deleting the active button/screen from inside its LVGL event
+    // callback can invalidate the object currently dispatching the event.
+    processPendingNavigation();
+
+    if (currentScreen_ == App::ScreenId::Splash && SplashScreen::finished(now)) {
+        showMainMenu();
+        return;
+    }
+
+    if (now - lastRefreshAt_ < AppConfig::UI_REFRESH_INTERVAL_MS) {
+        return;
+    }
+    lastRefreshAt_ = now;
+
+    if (currentScreen_ == App::ScreenId::MainMenu) {
+        MenuScreen::update(
+            reference,
+            makeMenuIndicators(
+                gpsState,
+                trackerState,
+                digiIgateState,
+                unreadMessageCount_,
+                newStationCount_));
+    } else if (currentScreen_ == App::ScreenId::LoRaStatus) {
+        LoRaScreen::update(radioState);
+    } else if (currentScreen_ == App::ScreenId::Messages) {
+        MessagesScreen::update(messageState);
+    } else if (currentScreen_ == App::ScreenId::GpsStatus) {
+        GpsScreen::update(gpsState);
+    } else if (currentScreen_ == App::ScreenId::Stations) {
+        StationsScreen::update(stationState, reference);
+    } else if (currentScreen_ == App::ScreenId::Weather) {
+        WeatherScreen::update(weatherState, reference);
+    } else if (currentScreen_ == App::ScreenId::Tracker) {
+        TrackerScreen::update(gpsState, trackerState, settingsState);
+    } else if (currentScreen_ == App::ScreenId::DigiIgate) {
+        DigiIgateScreen::update(digiIgateState, settingsState);
+    }
+}
+
+void ScreenManager::setMessage(const char* text) {
+    if (currentScreen_ == App::ScreenId::MainMenu) {
+        MenuScreen::setMessage(text);
+    } else if (currentScreen_ == App::ScreenId::LoRaStatus) {
+        LoRaScreen::setMessage(text);
+    } else if (currentScreen_ == App::ScreenId::Messages) {
+        MessagesScreen::setMessage(text);
+    } else if (currentScreen_ == App::ScreenId::Settings) {
+        SettingsScreen::setMessage(text);
+    } else if (currentScreen_ == App::ScreenId::Tracker) {
+        TrackerScreen::setMessage(text);
+    } else if (currentScreen_ == App::ScreenId::DigiIgate) {
+        DigiIgateScreen::setMessage(text);
+    } else if (currentScreen_ != App::ScreenId::MainMenu &&
+               currentScreen_ != App::ScreenId::Splash) {
+        PlaceholderScreen::setMessage(text);
+    }
+}
+
+void ScreenManager::navigationThunk(App::NavigationAction action, void* context) {
+    if (context != nullptr) {
+        static_cast<ScreenManager*>(context)->queueNavigation(action);
+    }
+}
+
+void ScreenManager::queueNavigation(App::NavigationAction action) {
+    const std::uint32_t now = millis();
+    if (static_cast<std::int32_t>(now - navigationLockedUntil_) < 0) {
+        return;
+    }
+
+    pendingNavigation_ = action;
+    navigationPending_ = true;
+}
+
+void ScreenManager::processPendingNavigation() {
+    if (!navigationPending_) {
+        return;
+    }
+
+    const App::NavigationAction action = pendingNavigation_;
+    navigationPending_ = false;
+    handleNavigation(action);
+}
+
+void ScreenManager::handleNavigation(App::NavigationAction action) {
+    if (currentScreen_ == App::ScreenId::Splash) {
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::MainMenu) {
+        if (action == App::NavigationAction::Up) {
+            MenuScreen::moveSelection(-1);
+        } else if (action == App::NavigationAction::Down) {
+            MenuScreen::moveSelection(1);
+        } else if (action == App::NavigationAction::Confirm) {
+            selectedMenuItem_ = MenuScreen::selectedIndex();
+            showTarget(App::MenuModel::item(selectedMenuItem_).target);
+        }
+        return;
+    }
+
+    if (action == App::NavigationAction::Back) {
+        showMainMenu();
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::LoRaStatus &&
+        action == App::NavigationAction::Confirm &&
+        commandHandler_ != nullptr) {
+        commandHandler_(App::Command::SendTestPacket, commandContext_);
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::Messages) {
+        if (action == App::NavigationAction::Confirm) {
+            MessagesScreen::compose();
+        } else if (action == App::NavigationAction::Up || action == App::NavigationAction::Down) {
+            MessagesScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
+        }
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::Stations &&
+        (action == App::NavigationAction::Up || action == App::NavigationAction::Down)) {
+        StationsScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::Weather &&
+        (action == App::NavigationAction::Up || action == App::NavigationAction::Down)) {
+        WeatherScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::Tracker) {
+        if (action == App::NavigationAction::Confirm) {
+            TrackerScreen::save();
+        } else if (action == App::NavigationAction::Up || action == App::NavigationAction::Down) {
+            TrackerScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
+        }
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::DigiIgate) {
+        if (action == App::NavigationAction::Confirm) {
+            DigiIgateScreen::save();
+        } else if (action == App::NavigationAction::Up ||
+                   action == App::NavigationAction::Down) {
+            DigiIgateScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
+        }
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::Settings &&
+        action == App::NavigationAction::Confirm) {
+        SettingsScreen::save();
+        return;
+    }
+
+    if (action == App::NavigationAction::Up || action == App::NavigationAction::Down) {
+        const int direction = action == App::NavigationAction::Up ? -1 : 1;
+        const std::size_t count = App::MenuModel::count();
+        if (direction < 0) {
+            selectedMenuItem_ = selectedMenuItem_ == 0 ? count - 1 : selectedMenuItem_ - 1;
+        } else {
+            selectedMenuItem_ = (selectedMenuItem_ + 1) % count;
+        }
+        showTarget(App::MenuModel::item(selectedMenuItem_).target);
+    }
+}
+
+void ScreenManager::show(App::ScreenId screen) {
+    currentScreen_ = screen;
+    navigationPending_ = false;
+    navigationLockedUntil_ = millis() + 180U;
+    if (screen == App::ScreenId::Messages) {
+        unreadMessageCount_ = 0;
+    } else if (screen == App::ScreenId::Stations) {
+        newStationCount_ = 0;
+    }
+
+    if (screen == App::ScreenId::MainMenu) {
+        MenuScreen::create(
+            selectedMenuItem_,
+            referenceState_,
+            makeMenuIndicators(
+                gpsState_,
+                trackerState_,
+                digiIgateState_,
+                unreadMessageCount_,
+                newStationCount_));
+    } else if (screen == App::ScreenId::LoRaStatus) {
+        LoRaScreen::create();
+    } else if (screen == App::ScreenId::Messages) {
+        MessagesScreen::create(messageSendHandler_, messageSendContext_);
+    } else if (screen == App::ScreenId::GpsStatus) {
+        GpsScreen::create();
+        GpsScreen::update(gpsState_);
+    } else if (screen == App::ScreenId::Stations) {
+        StationsScreen::create();
+    } else if (screen == App::ScreenId::Weather) {
+        WeatherScreen::create();
+    } else if (screen == App::ScreenId::Tracker) {
+        TrackerScreen::create(
+            settingsState_,
+            gpsState_,
+            trackerState_,
+            trackerSaveHandler_,
+            trackerSaveContext_);
+    } else if (screen == App::ScreenId::DigiIgate) {
+        DigiIgateScreen::create(
+            settingsState_,
+            digiIgateState_,
+            digiIgateSaveHandler_,
+            digiIgateSaveContext_);
+    } else if (screen == App::ScreenId::Settings) {
+        SettingsScreen::create(
+            settingsState_,
+            settingsSaveHandler_,
+            settingsSaveContext_);
+    } else {
+        const App::MenuModel::MenuItem& item = App::MenuModel::item(selectedMenuItem_);
+        PlaceholderScreen::create(item.title, item.description);
+    }
+    rebuildNavigationBar();
+}
+
+void ScreenManager::showMainMenu() {
+    show(App::ScreenId::MainMenu);
+}
+
+void ScreenManager::showTarget(App::ScreenId target) {
+    show(target);
+}
+
+void ScreenManager::rebuildNavigationBar() {
+    if (currentScreen_ != App::ScreenId::Splash) {
+        createNavigationBar(navigationThunk, this);
+    }
+}
+
+}  // namespace Ui

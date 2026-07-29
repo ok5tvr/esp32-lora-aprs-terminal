@@ -1,0 +1,35 @@
+{
+  "build": {
+    "arduino": {
+      "ldscript": "esp32_out.ld"
+    },
+    "core": "esp32",
+    "extra_flags": "-DARDUINO_ESP32_DEV -DBOARD_HAS_PSRAM",
+    "f_cpu": "240000000L",
+    "f_flash": "80000000L",
+    "flash_mode": "qio",
+    "mcu": "esp32",
+    "variant": "esp32"
+  },
+  "connectivity": [
+    "wifi",
+    "bluetooth"
+  ],
+  "debug": {
+    "openocd_target": "esp32.cfg"
+  },
+  "frameworks": [
+    "arduino",
+    "espidf"
+  ],
+  "name": "Waveshare ESP32-Touch-LCD-3.5 (ESP32-D0WDR2-V3, 16MB Flash, 2MB PSRAM)",
+  "upload": {
+    "flash_size": "16MB",
+    "maximum_ram_size": 327680,
+    "maximum_size": 8323072,
+    "require_upload_port": true,
+    "speed": 460800
+  },
+  "url": "https://www.waveshare.com/wiki/ESP32-Touch-LCD-3.5",
+  "vendor": "Waveshare"
+}
