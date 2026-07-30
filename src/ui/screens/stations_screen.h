@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include "services/geo_utils.h"
 #include "services/station_store.h"
 
@@ -10,7 +12,8 @@ void create();
 void update(
     const Services::StationStore::ViewState& state,
     const Services::PositionReference& reference);
-void scroll(int direction);
+void moveSelection(int direction);
+std::size_t selectedIndex();
 
 }  // namespace StationsScreen
 }  // namespace Ui

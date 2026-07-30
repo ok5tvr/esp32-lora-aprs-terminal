@@ -18,6 +18,7 @@ constexpr char KEY_CALLSIGN[] = "call";
 constexpr char KEY_LATITUDE[] = "lat";
 constexpr char KEY_LONGITUDE[] = "lon";
 constexpr char KEY_TRACKER_ENABLED[] = "trken";
+constexpr char KEY_TRAIL_ENABLED[] = "trailen";
 constexpr char KEY_TRACKER_SOURCE[] = "trksrc";
 constexpr char KEY_TRACKER_FORMAT[] = "trkfmt";
 constexpr char KEY_TRACKER_MODE[] = "trkmode";
@@ -196,6 +197,7 @@ bool SettingsService::begin() {
     }
 
     view_.trackerEnabled = preferences.getBool(KEY_TRACKER_ENABLED, false);
+    view_.trailEnabled = preferences.getBool(KEY_TRAIL_ENABLED, false);
     const std::uint8_t sourceValue = preferences.getUChar(
         KEY_TRACKER_SOURCE,
         static_cast<std::uint8_t>(App::TrackerPositionSource::Gps));
@@ -356,6 +358,7 @@ bool SettingsService::save(
 
 bool SettingsService::saveTracker(
     bool enabled,
+    bool trailEnabled,
     App::TrackerPositionSource source,
     App::TrackerPositionFormat format,
     App::TrackerBeaconMode mode,
@@ -386,6 +389,7 @@ bool SettingsService::saveTracker(
     }
 
     const bool enabledSaved = preferences.putBool(KEY_TRACKER_ENABLED, enabled) > 0;
+    const bool trailEnabledSaved = preferences.putBool(KEY_TRAIL_ENABLED, trailEnabled) > 0;
     const bool sourceSaved = preferences.putUChar(
         KEY_TRACKER_SOURCE,
         static_cast<std::uint8_t>(source)) > 0;
@@ -403,13 +407,14 @@ bool SettingsService::saveTracker(
         fixedIntervalSeconds) > 0;
     preferences.end();
 
-    if (!enabledSaved || !sourceSaved || !formatSaved || !modeSaved ||
+    if (!enabledSaved || !trailEnabledSaved || !sourceSaved || !formatSaved || !modeSaved ||
         !symbolSaved || !intervalSaved) {
         setError(errorText, errorTextCapacity, "Ulozeni trackeru do NVS se nepodarilo.");
         return false;
     }
 
     view_.trackerEnabled = enabled;
+    view_.trailEnabled = trailEnabled;
     view_.trackerSource = source;
     view_.trackerFormat = format;
     view_.trackerMode = mode;
@@ -420,8 +425,9 @@ bool SettingsService::saveTracker(
     setError(errorText, errorTextCapacity, "");
     LOG_I(
         "SETTINGS",
-        "Tracker saved: %s source=%u format=%u mode=%u symbol=%u interval=%u",
+        "Tracker saved: %s trail=%s source=%u format=%u mode=%u symbol=%u interval=%u",
         enabled ? "enabled" : "disabled",
+        trailEnabled ? "enabled" : "disabled",
         static_cast<unsigned>(source),
         static_cast<unsigned>(format),
         static_cast<unsigned>(mode),

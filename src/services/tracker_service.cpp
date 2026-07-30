@@ -121,19 +121,14 @@ void TrackerService::update(
                 : "BOOT beacon ceka: GPS nebyla nalezena");
             return;
         }
-        if (radio.viewState().transmitting) {
-            setStatus("BOOT beacon ceka: radio je obsazeno");
-            return;
-        }
-
         if (buildAndSend(now, settings, gps, radio)) {
             manualBeaconPending_ = false;
             view_.manualBeaconPending = false;
             ++view_.manualPacketsSent;
             ++view_.revision;
             setStatus(settings.trackerEnabled
-                ? "BOOT beacon odeslan; plan trackeru restartovan"
-                : "BOOT beacon odeslan; tracker zustava vypnut");
+                ? "BOOT beacon zarazen; plan trackeru restartovan"
+                : "BOOT beacon zarazen; tracker zustava vypnut");
         } else {
             setStatus("BOOT beacon ceka: odeslani zatim nebylo mozne");
         }
@@ -188,16 +183,11 @@ void TrackerService::update(
             : static_cast<std::uint32_t>((intervalMs - elapsedMs + 999U) / 1000U);
     }
 
-    if (radio.viewState().transmitting) {
-        setStatus("Tracker aktivni: radio prave vysila");
-        return;
-    }
-
     if (due) {
         if (buildAndSend(now, settings, gps, radio)) {
             setStatus(settings.trackerMode == App::TrackerBeaconMode::SmartBeacon
-                ? "Tracker aktivni: SmartBeacon paket odeslan"
-                : "Tracker aktivni: casovy paket odeslan");
+                ? "Tracker aktivni: SmartBeacon paket zarazen"
+                : "Tracker aktivni: casovy paket zarazen");
         } else {
             setStatus("Tracker: odeslani se nepodarilo");
         }
@@ -291,7 +281,7 @@ bool TrackerService::buildAndSend(
         return false;
     }
 
-    if (!radio.sendTnc2(frame, now)) {
+    if (!radio.queueTrackerPacket(frame, manualBeaconPending_, now)) {
         return false;
     }
 

@@ -13,7 +13,7 @@ struct MenuItem {
     ScreenId target;
 };
 
-constexpr std::size_t ITEM_COUNT = 8;
+constexpr std::size_t ITEM_COUNT = 10;
 
 std::size_t count();
 const MenuItem& item(std::size_t index);

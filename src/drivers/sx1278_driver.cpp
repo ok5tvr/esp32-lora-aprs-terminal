@@ -35,8 +35,13 @@ void Sx1278Driver::onRadioInterrupt() {
 
 bool Sx1278Driver::begin() {
     status_ = Status{};
+    interruptFlag_ = false;
+    packetAvailable_ = false;
+    transmitLength_ = 0;
+    interruptAction_ = InterruptAction::None;
     activeInstance_ = this;
 
+    pinMode(BoardPins::LORA_DIO0, INPUT_PULLDOWN);
     pinMode(BoardPins::LORA_CS, OUTPUT);
     digitalWrite(BoardPins::LORA_CS, HIGH);
     spi_.begin(
@@ -77,8 +82,22 @@ bool Sx1278Driver::begin() {
         return false;
     }
 
+    status_.lastActivityAtMs = millis();
     LOG_I("RADIO", "Receiver active");
     return true;
+}
+
+bool Sx1278Driver::recover() {
+    const Status previous = status_;
+    const bool ready = begin();
+    status_.receivedPackets += previous.receivedPackets;
+    status_.transmittedPackets += previous.transmittedPackets;
+    status_.receiveErrors += previous.receiveErrors;
+    status_.transmitTimeouts += previous.transmitTimeouts;
+    if (ready) {
+        status_.consecutiveReceiveErrors = 0;
+    }
+    return ready;
 }
 
 void Sx1278Driver::update(std::uint32_t now) {
@@ -90,6 +109,8 @@ void Sx1278Driver::update(std::uint32_t now) {
         now - transmitStartedAt_ > AppConfig::RADIO_TX_TIMEOUT_MS) {
         LOG_E("RADIO", "Transmit timeout");
         radio_.finishTransmit();
+        ++status_.transmitTimeouts;
+        status_.lastActivityAtMs = now;
         setError(RADIOLIB_ERR_TX_TIMEOUT);
         startReceive();
         return;
@@ -192,10 +213,16 @@ void Sx1278Driver::processReceiveInterrupt() {
         pendingPacket_ = packet;
         packetAvailable_ = true;
         ++status_.receivedPackets;
+        status_.consecutiveReceiveErrors = 0;
+        status_.lastActivityAtMs = millis();
         LOG_D("RADIO", "RX %u bytes, RSSI %.1f, SNR %.1f",
               static_cast<unsigned>(packet.length), packet.rssiDbm, packet.snrDb);
     } else {
         ++status_.receiveErrors;
+        if (status_.consecutiveReceiveErrors < 0xFFU) {
+            ++status_.consecutiveReceiveErrors;
+        }
+        status_.lastActivityAtMs = millis();
         LOG_E("RADIO", "readData failed: %d", state);
     }
 
@@ -207,6 +234,7 @@ void Sx1278Driver::processTransmitInterrupt() {
     status_.lastError = state;
     if (state == RADIOLIB_ERR_NONE) {
         ++status_.transmittedPackets;
+        status_.lastActivityAtMs = millis();
         LOG_D("RADIO", "TX finished");
     } else {
         LOG_E("RADIO", "finishTransmit failed: %d", state);

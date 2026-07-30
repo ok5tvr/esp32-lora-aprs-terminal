@@ -1,5 +1,6 @@
 #include "services/station_store.h"
 
+#include <cstdio>
 #include <cstring>
 
 namespace Services {
@@ -12,7 +13,8 @@ bool StationStore::ingest(
     const Aprs::ParsedFrame& frame,
     float rssiDbm,
     float snrDb,
-    std::uint32_t now) {
+    std::uint32_t now,
+    const char* lastFrame) {
 
     if (!frame.valid || frame.source[0] == '\0' || frame.entityName[0] == '\0') {
         return false;
@@ -61,6 +63,9 @@ bool StationStore::ingest(
     updated.lastSnrDb = snrDb;
     updated.lastHeardMs = now;
     ++updated.heardCount;
+    if (lastFrame != nullptr && lastFrame[0] != '\0') {
+        std::snprintf(updated.lastFrame, sizeof(updated.lastFrame), "%s", lastFrame);
+    }
 
     if (frame.hasPosition) {
         updated.hasPosition = true;

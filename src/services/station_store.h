@@ -23,6 +23,7 @@ public:
         float lastSnrDb = 0.0F;
         std::uint32_t lastHeardMs = 0;
         std::uint32_t heardCount = 0;
+        char lastFrame[192] = {};
     };
 
     struct ViewState {
@@ -40,7 +41,8 @@ public:
         const Aprs::ParsedFrame& frame,
         float rssiDbm,
         float snrDb,
-        std::uint32_t now);
+        std::uint32_t now,
+        const char* lastFrame = nullptr);
     const ViewState& viewState() const;
 
 private:

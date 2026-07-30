@@ -15,6 +15,10 @@ struct IndicatorState {
     bool gpsFix = false;
     bool trackerConfigured = false;
     bool trackerActive = false;
+    bool trailConfigured = false;
+    bool trailRecording = false;
+    bool trailPaused = false;
+    bool trailError = false;
     bool digiEnabled = false;
     bool igateEnabled = false;
     bool igateVerified = false;

@@ -1,176 +1,8 @@
-<h1>LoRa APRS Terminal for Waveshare ESP32 Touch LCD 3.5"</h1>
-
-A touchscreen LoRa APRS terminal built for the Waveshare ESP32 Touch LCD 3.5" board and an external RA-02 / SX1278 433 MHz LoRa module.
-
-The terminal can receive, decode, display and transmit APRS packets over a LoRa radio network. It combines the functions of an APRS receiver, GPS tracker, messaging terminal, weather station monitor, digipeater and receive-only APRS-IS iGate.
-
-Created by OK5TVR
-
-<h2>Main features</h2>
-reception and display of LoRa APRS packets,
-list of the latest 15 unique stations, objects and items,
-decoding of standard, compressed and Mic-E positions,
-APRS objects and items,
-graphical APRS symbols,
-distance and bearing calculation,
-separate list of five weather stations,
-decoding of temperature, humidity, pressure, wind and rainfall,
-APRS text message transmission and reception,
-message acknowledgements and retransmission,
-configurable messages with or without ACK,
-GPS tracker with fixed beacon intervals,
-SmartBeaconing support,
-standard and compressed APRS positions,
-selectable tracker symbol,
-instant position beacon using the BOOT button,
-external NMEA GPS receiver support,
-detailed GPS diagnostics,
-Maidenhead grid locator calculation,
-APRS digipeater with duplicate protection,
-receive-only APRS-IS iGate,
-touchscreen configuration,
-editable callsign and default position,
-Wi-Fi and APRS-IS configuration,
-persistent configuration stored in ESP32 NVS,
-status indicators for GPS, messages, new stations, tracker, digipeater and iGate.
-<h2>Supported hardware</h2>
-Waveshare ESP32 Touch LCD 3.5",
-ESP32-D0WDR2-V3,
-ST7796 480 × 320 display,
-FT6336 capacitive touchscreen,
-RA-02 / SX1278 433 MHz LoRa module,
-optional NMEA GPS receiver,
-optional microSD card.
-<h2>Default LoRa configuration</h2>
-Frequency:        433.775 MHz
-Bandwidth:        125 kHz
-Spreading factor: SF12
-Coding rate:      4/5
-Sync word:        0x12
-Preamble:         8 symbols
-TX power:         10 dBm
-Payload CRC:      disabled
-Explicit header:  enabled
-<h2>RA-02 wiring</h2>
-RA-02	ESP32
-VCC	3.3 V
-GND	GND
-SCK	GPIO14
-MISO	GPIO13
-MOSI	GPIO26
-NSS / CS	GPIO33
-RESET	GPIO32
-DIO0	GPIO4
-
-<h2>Optional GPS receiver:</h2>
-
-GPS	ESP32
-TX	GPIO17
-GND	GND
-VCC	according to the GPS module
-
-The GPS serial output must use a maximum logic level of 3.3 V.
-
-<h2>APRS tracker</h2>
-
-The integrated tracker supports:
-
-GPS or configurable default position,
-standard or compressed APRS coordinates,
-fixed beacon intervals,
-SmartBeaconing,
-selectable APRS symbol,
-manual beacon transmission using the BOOT button.
-
-The tracker can operate independently from the periodic beacon function. A single position packet can therefore be transmitted using the BOOT button even when automatic tracking is disabled.
-
-<h2>Digipeater</h2>
-
-The digipeater supports:
-
-WIDE1-1 fill-in operation,
-traceable WIDE2-N,
-direct callsign routing,
-configurable maximum WIDE value,
-duplicate packet detection,
-loop prevention,
-rejection of internet-originated packets,
-random retransmission delay.
-
-Example:
-
-Received:
-OK1ABC>APRS,WIDE1-1,WIDE2-1:...
-
-<h2>Repeated:</h2>
-OK1ABC>APRS,OK5TVR-17*,WIDE2-1:...
-Receive-only iGate
-
-The iGate forwards packets in one direction:
-
-LoRa RF → Wi-Fi → APRS-IS
-
-Packets received from APRS-IS are not transmitted back to the LoRa radio channel.
-
-The iGate supports:
-
-configurable Wi-Fi credentials,
-APRS-IS server and port,
-APRS-IS passcode,
-optional server-side filter,
-verified login detection,
-qAO packet construction,
-filtering of NOGATE, RFONLY, TCPIP and other loop-forming paths.
-APRS messaging
-
-The terminal can send and receive APRS text messages.
-
-<h2>Supported functions include:</h2>
-
-touchscreen recipient and message entry,
-automatic message identifiers,
-ACK and REJ processing,
-configurable messages with or without ACK,
-retransmission of unacknowledged messages,
-duplicate message detection,
-unread-message indicator.
-GPS diagnostics
-
-<h2>The GPS page displays:</h2>
-
-UART data activity,
-detected NMEA sentence type,
-checksum statistics,
-GPS fix validity,
-latitude and longitude,
-altitude,
-speed,
-course and cardinal direction,
-number of satellites,
-HDOP,
-UTC date and time,
-Maidenhead locator.
-
-Example:
-
-Position: 49.786333 N, 13.285000 E
-Locator:  JN69PS
-Speed:    42.6 km/h
-Course:   064° ENE
-Building the firmware
-
-The project uses PlatformIO.
-Project status
-
-The project is under active development. Hardware testing is recommended after every firmware update, especially for radio, GPS, Wi-Fi and touchscreen functions.
-
-<h2>Disclaimer</h2>
-
-This project is intended for experimental amateur radio use. The operator is responsible for complying with local radio regulations, licence conditions, permitted frequencies, transmission power limits and local APRS network policies.
-
 # Waveshare ESP32-Touch-LCD-3.5 - LoRa APRS terminal
 
-> Version 1.0.5 adds tracker, digipeater and LoRa iGate APRS status icons to the compact `LoRa` main header.
+> Version 1.3.0 adds a fixed-priority central TX queue, expanded LoRa
+> diagnostics, automatic RA-02 recovery, station details and bearing/distance
+> navigation. The verified GPS GPIO4 / LoRa DIO0 GPIO2 wiring remains unchanged.
 
 PlatformIO project for the **classic ESP32-D0WDR2-V3** Waveshare board with:
 
@@ -219,12 +51,14 @@ LCD and microSD share the data lines but have independent chip-select pins.
 | MOSI | 26 |
 | NSS / CS | 33 |
 | RESET | 32 |
-| DIO0 | 4 |
+| DIO0 | 2 |
 | DIO1 | not connected |
 | VCC | 3.3 V only |
 | GND | GND |
 
 Connect a 433 MHz antenna before transmitting. Place 100 nF, 10 uF and 47-100 uF between 3.3 V and GND close to the RA-02 module.
+
+GPIO2 is a boot-strapping pin. Add a 10 kOhm pulldown from GPIO2 to GND so RA-02 DIO0 remains low during reset and firmware upload. Do not enable the onboard I2S audio interface because GPIO2 and GPIO4 are reused by LoRa DIO0 and GPS RX.
 
 
 ## Memory layout
@@ -236,8 +70,10 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 - splash screen
 - touch menu with Up, Down, OK and Back buttons
 - onboard BOOT button short press for an immediate APRS position beacon
-- LoRa status screen
-- non-blocking receive and test transmission
+- expanded LoRa diagnostics with APRS/decode counters, TX queue depth, drops and recovery history
+- fixed eight-entry central TX queue with ACK, message, DIGI, manual beacon, tracker and test priorities
+- automatic RA-02-only recovery after initialization failure, TX timeout or repeated RX errors
+- non-blocking receive and queued test transmission
 - RSSI, SNR, frequency error and packet counters
 - LoRa APRS reception with payload CRC disabled
 - APRS directed-message receive/transmit with automatic ACK and retry handling
@@ -247,15 +83,24 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 - fixed list of the 15 most recently heard APRS stations, objects or items
 - original source callsign with SSID, APRS symbol code and GPS position
 - compact graphical APRS icons with overlay rendering, including the LoRa iGate `L&` symbol
-- touch-scrollable Heard Stations screen
+- selectable Heard Stations screen; Up/Down selects an entity and OK opens its detail
+- station/object/item detail with last-heard age, packet count, coordinates, RSSI, SNR and last TNC2 frame
+- simple navigation to a positioned APRS entity with live distance and true bearing from GPS/default reference
 - dedicated list of the five most recently heard unique APRS weather stations
 - decoded temperature, humidity, pressure, wind, rain and solar-radiation data
 - editable callsign and default GPS position stored in ESP32 NVS
 - modal touchscreen keyboard for text and numeric settings
 - distance and azimuth from the current GPS/default reference to heard stations and weather stations
-- UART2 NMEA diagnostics with traffic, packet/checksum, fix, UTC, speed, course and locator display
-- main-menu GPS/default Maidenhead locator and compact GPS/message/new-station/tracker/digipeater/iGate status indicators
+- UART2 NMEA diagnostics with traffic, packet/checksum, fix, UTC, speed, course, locator and the latest complete received sentence
+- main-menu GPS/default Maidenhead locator and compact GPS/message/new-station/tracker/Stopar/digipeater/iGate status indicators
 - persistent APRS tracker with normal/compressed position, selectable APRS symbol and fixed/SmartBeacon scheduling
+- independent **Stopar** GPS route logger enabled from the Tracker page
+- read-only AXP2101 battery, USB-C, charger and PMIC-temperature telemetry
+- permanent header summary with battery percentage, voltage and battery/charge/USB symbol
+- dedicated **Napajeni** page with charger phase, configured current, target voltage and last power event
+- automatic pause after 30 seconds without movement and automatic resume after movement returns
+- manual pause/resume from the dedicated Stopar page
+- timestamped semicolon-separated TXT logs in `/STOPAR` on microSD, with the eight newest files listed on screen
 - New-N style WIDE1-1 fill-in and traceable WIDE2-N digipeater with duplicate suppression
 - receive-only RF-to-APRS-IS iGate using verified login and `qAO` gating
 - touchscreen WiFi, APRS-IS, DIGI mode, hop-limit and startup configuration stored in NVS
@@ -288,21 +133,122 @@ prepared for the later local GPS/beacon module and can already be changed from
 the touchscreen.
 
 
-## Main-header indicators in version 1.0.5
+## Main-header indicators in version 1.2.0
 
 The main screen header is arranged as:
 
 ```text
-LoRa  [GPS] [message] [station] [car] [digi] [L&]  GPS JN69PS
+LoRa  [GPS] [message] [station] [car] [save] [digi] [L&]  74%  3,91V  [battery]
 ```
+
+The GPS/default Maidenhead locator remains visible in the lower status area so
+that the power summary does not overlap the existing service indicators.
 
 - GPS is grey without serial traffic, orange when NMEA is active without a fix, and green with a current fix.
 - The message bell displays the number of newly received APRS messages. Opening **Zpravy** clears the badge.
 - The radio/station icon displays the number of newly discovered stations, objects or items. Opening **Slysene stanice** clears the badge.
 - Compact badges display values 1 through 9; larger pending counts remain represented as 9 until the relevant page is opened.
 - The APRS car icon `/>` is green while the tracker is active, amber while enabled but waiting for a usable position, and grey while disabled.
+- The save icon is green while Stopar is recording, amber while configured but paused/waiting, red after an SD write error, and grey while disabled.
 - The APRS digipeater icon `/#` is purple whenever RF digipeating is enabled.
 - The LoRa iGate icon `L&` is amber while connecting and green after the APRS-IS login is verified.
+
+
+## Radio scheduling and station navigation in version 1.3.0
+
+All RF transmissions now enter a fixed eight-entry RAM queue. No dynamic
+allocation is used. The scheduler always chooses the highest-priority item and
+keeps FIFO order inside the same priority:
+
+```text
+ACK -> outgoing message -> DIGI -> manual beacon -> tracker -> test
+```
+
+A newer scheduled tracker frame replaces an older queued tracker frame, so a
+stale position is not transmitted after a long busy period. If the queue is
+full, a newly arrived higher-priority packet may evict the newest item from the
+lowest available priority. The LoRa diagnostics page displays current/max queue
+depth, enqueue/replacement/drop counters and the source of the last TX.
+
+The radio service automatically reinitializes only the SX1278 after an initial
+startup failure, a TX timeout or three consecutive receive errors. Recovery is
+rate-limited to one attempt per five seconds and preserves lifetime packet/error
+counters. GPS, display, settings and SD logging are not restarted.
+
+On **Prijate stanice**, Up/Down selects a row and OK opens its detail. A second
+OK starts simple bearing/distance navigation when the entity has a position.
+The reference is the live GPS fix when available, otherwise the configured
+default position. The displayed direction is a geographic bearing; the board
+has no enabled compass, so it is not a turn-by-turn heading indicator.
+
+## AXP2101 power management in version 1.2.0
+
+The onboard AXP2101 is read through the shared I2C bus on GPIO21/GPIO22. The
+firmware enables only the measurement channels required for telemetry and does
+not change the charger current, target voltage or PMIC output rails.
+
+The permanent header summary displays battery percentage and battery voltage.
+Its final symbol and colour have the following meaning:
+
+- battery symbol: normal operation from the accumulator
+- lightning symbol, green: charging is active
+- USB symbol, blue: USB-C is connected and active charging is not in progress
+- battery symbol, red: battery is critical (10 percent or 3.40 V by default)
+
+The **Napajeni** page displays:
+
+- battery presence, percentage and voltage
+- operating state (charging, discharging, USB-C supply or standby)
+- charger phase (pre-charge, constant current, constant voltage, done or stopped)
+- configured charge-current setting and charge-target voltage
+- USB-C/VBUS presence, VBUS validity and measured VBUS voltage
+- system voltage and internal PMIC die temperature
+- the most recent detected transition, such as USB connection/disconnection,
+  battery connection/disconnection, charge start/end or critical battery
+
+Power values are polled every two seconds after GPS, LoRa, tracker and Stopar
+processing. The operation is short, read-only I2C traffic and does not perform
+SD writes. Thresholds and polling interval are defined in `include/app_config.h`.
+
+The PMIC temperature is the internal AXP2101 die temperature, not the Li-Pol
+cell temperature. The displayed charge current is the configured charger
+setting, not a live measurement of battery current.
+
+
+## Stopar route logger in version 1.1.0
+
+Stopar is enabled persistently on the **Tracker** page, but it has its own
+main-menu page for status, manual pause/resume and browsing the eight newest
+TXT logs. Recording starts after a valid GPS position and UTC date/time are
+available. A new file is created for every recording session:
+
+```text
+/STOPAR/YYYYMMDD_HHMMSS.txt
+```
+
+Every data row is plain text and uses semicolon-separated fields:
+
+```text
+UTC;latitude;longitude;altitude_m;speed_kmh;course_deg;satellites;hdop;state
+```
+
+The file also contains comment lines for `START`, `STOP`, `AUTO_PAUSE`,
+`AUTO_RESUME`, `MANUAL_PAUSE` and `MANUAL_RESUME`. Time is stored as GPS UTC,
+so the files are independent of local daylight-saving changes.
+
+The default sampling interval is 5 seconds. A point is retained after at
+least 3 metres of movement, or after 30 seconds even when the movement
+threshold was not reached. Autopause activates after 30 seconds without
+movement. Recording resumes at 2 km/h or after an 8 metre displacement.
+These values are constants in `include/app_config.h`.
+
+Stopar is deliberately serviced after GPS, LoRa receive and APRS tracker work.
+It queues text rows in RAM, writes at most one queued row per loop and batches
+`flush()` calls. LoRa uses independent HSPI, while LCD and microSD share VSPI.
+With a healthy FAT32 microSD card the logger should not noticeably affect
+normal reception or tracker scheduling. SD access is nevertheless synchronous,
+so a slow, damaged or heavily fragmented card can still cause an occasional
+short UI or loop delay. See `docs/TRAIL_LOGGER.md` for details.
 
 
 ## DIGI / iGate in version 1.0.2
@@ -518,12 +464,12 @@ A generic NMEA GPS receiver can be connected receive-only to UART2:
 
 | GPS module | Waveshare ESP32 |
 |---|---:|
-| TX | GPIO17 |
+| TX | GPIO4 |
 | GND | GND |
 | VCC | use the voltage specified for the particular GPS breakout |
 | RX | not connected |
 
-The signal presented to ESP32 GPIO17 must use 3.3 V logic. The default serial
+The signal presented to ESP32 GPIO4 must use 3.3 V logic. The default serial
 format is 9600 baud, 8-N-1. The firmware regards the receiver as present after
 receiving valid NMEA sentences and regards a position fix as usable while it is
 not older than five seconds.

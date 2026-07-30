@@ -12,8 +12,12 @@ enum class ScreenId : std::uint8_t {
     Messages,
     GpsStatus,
     Stations,
+    StationDetail,
+    StationNavigation,
     Weather,
     Tracker,
+    Trail,
+    Power,
     DigiIgate,
     Settings
 };
@@ -27,7 +31,8 @@ enum class NavigationAction : std::uint8_t {
 
 enum class Command : std::uint8_t {
     None,
-    SendTestPacket
+    SendTestPacket,
+    ToggleTrailPause
 };
 
 enum class TrackerPositionSource : std::uint8_t {
@@ -96,6 +101,7 @@ using DigiIgateSettingsSaveHandler = bool (*)(
     void* context);
 using TrackerSettingsSaveHandler = bool (*)(
     bool enabled,
+    bool trailEnabled,
     TrackerPositionSource source,
     TrackerPositionFormat format,
     TrackerBeaconMode mode,

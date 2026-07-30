@@ -1,6 +1,7 @@
 #include "ui/screen_manager.h"
 
 #include <Arduino.h>
+#include <cstring>
 
 #include "app/menu_model.h"
 #include "app_config.h"
@@ -10,9 +11,13 @@
 #include "ui/screens/menu_screen.h"
 #include "ui/screens/messages_screen.h"
 #include "ui/screens/placeholder_screen.h"
+#include "ui/screens/power_screen.h"
 #include "ui/screens/settings_screen.h"
 #include "ui/screens/splash_screen.h"
 #include "ui/screens/stations_screen.h"
+#include "ui/screens/station_detail_screen.h"
+#include "ui/screens/station_navigation_screen.h"
+#include "ui/screens/trail_screen.h"
 #include "ui/screens/tracker_screen.h"
 #include "ui/screens/weather_screen.h"
 #include "ui/ui_components.h"
@@ -29,6 +34,7 @@ void addNotificationCount(std::uint8_t& count, std::uint32_t delta) {
 MenuScreen::IndicatorState makeMenuIndicators(
     const Services::GpsService::ViewState& gps,
     const Services::TrackerService::ViewState& tracker,
+    const Services::TrailService::ViewState& trail,
     const Services::DigiIgateService::ViewState& digiIgate,
     std::uint8_t unreadMessages,
     std::uint8_t newStations) {
@@ -40,6 +46,13 @@ MenuScreen::IndicatorState makeMenuIndicators(
     state.gpsFix = gps.hasFix;
     state.trackerConfigured = tracker.configuredEnabled;
     state.trackerActive = tracker.active;
+    state.trailConfigured = trail.configuredEnabled;
+    state.trailRecording = trail.state == Services::TrailService::State::Recording;
+    state.trailPaused = trail.state == Services::TrailService::State::AutoPaused ||
+        trail.state == Services::TrailService::State::ManualPaused ||
+        trail.state == Services::TrailService::State::WaitingForGps ||
+        trail.state == Services::TrailService::State::WaitingForSd;
+    state.trailError = trail.state == Services::TrailService::State::Error;
     state.digiEnabled = digiIgate.digiEnabled;
     state.igateEnabled = digiIgate.igateEnabled;
     state.igateVerified = digiIgate.aprsIsVerified;
@@ -89,13 +102,19 @@ void ScreenManager::update(
     const Services::WeatherStore::ViewState& weatherState,
     const Services::GpsService::ViewState& gpsState,
     const Services::TrackerService::ViewState& trackerState,
+    const Services::TrailService::ViewState& trailState,
+    const Services::PowerService::ViewState& powerState,
     const Services::DigiIgateService::ViewState& digiIgateState,
     const Services::PositionReference& reference,
     const Services::SettingsService::ViewState& settingsState) {
 
     settingsState_ = settingsState;
     gpsState_ = gpsState;
+    stationState_ = &stationState;
+    refreshSelectedStation();
     trackerState_ = trackerState;
+    trailState_ = trailState;
+    powerState_ = powerState;
     digiIgateState_ = digiIgateState;
     referenceState_ = reference;
 
@@ -141,6 +160,7 @@ void ScreenManager::update(
         return;
     }
     lastRefreshAt_ = now;
+    updateHeaderPower(powerState);
 
     if (currentScreen_ == App::ScreenId::MainMenu) {
         MenuScreen::update(
@@ -148,6 +168,7 @@ void ScreenManager::update(
             makeMenuIndicators(
                 gpsState,
                 trackerState,
+                trailState,
                 digiIgateState,
                 unreadMessageCount_,
                 newStationCount_));
@@ -159,10 +180,18 @@ void ScreenManager::update(
         GpsScreen::update(gpsState);
     } else if (currentScreen_ == App::ScreenId::Stations) {
         StationsScreen::update(stationState, reference);
+    } else if (currentScreen_ == App::ScreenId::StationDetail && selectedStationValid_) {
+        StationDetailScreen::update(selectedStation_, reference, now);
+    } else if (currentScreen_ == App::ScreenId::StationNavigation && selectedStationValid_) {
+        StationNavigationScreen::update(selectedStation_, reference, now);
     } else if (currentScreen_ == App::ScreenId::Weather) {
         WeatherScreen::update(weatherState, reference);
     } else if (currentScreen_ == App::ScreenId::Tracker) {
         TrackerScreen::update(gpsState, trackerState, settingsState);
+    } else if (currentScreen_ == App::ScreenId::Trail) {
+        TrailScreen::update(trailState);
+    } else if (currentScreen_ == App::ScreenId::Power) {
+        PowerScreen::update(powerState);
     } else if (currentScreen_ == App::ScreenId::DigiIgate) {
         DigiIgateScreen::update(digiIgateState, settingsState);
     }
@@ -179,6 +208,8 @@ void ScreenManager::setMessage(const char* text) {
         SettingsScreen::setMessage(text);
     } else if (currentScreen_ == App::ScreenId::Tracker) {
         TrackerScreen::setMessage(text);
+    } else if (currentScreen_ == App::ScreenId::Trail) {
+        TrailScreen::setMessage(text);
     } else if (currentScreen_ == App::ScreenId::DigiIgate) {
         DigiIgateScreen::setMessage(text);
     } else if (currentScreen_ != App::ScreenId::MainMenu &&
@@ -231,7 +262,13 @@ void ScreenManager::handleNavigation(App::NavigationAction action) {
     }
 
     if (action == App::NavigationAction::Back) {
-        showMainMenu();
+        if (currentScreen_ == App::ScreenId::StationNavigation) {
+            show(App::ScreenId::StationDetail);
+        } else if (currentScreen_ == App::ScreenId::StationDetail) {
+            show(App::ScreenId::Stations);
+        } else {
+            showMainMenu();
+        }
         return;
     }
 
@@ -251,9 +288,33 @@ void ScreenManager::handleNavigation(App::NavigationAction action) {
         return;
     }
 
-    if (currentScreen_ == App::ScreenId::Stations &&
-        (action == App::NavigationAction::Up || action == App::NavigationAction::Down)) {
-        StationsScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
+    if (currentScreen_ == App::ScreenId::Stations) {
+        if (action == App::NavigationAction::Up || action == App::NavigationAction::Down) {
+            StationsScreen::moveSelection(action == App::NavigationAction::Up ? -1 : 1);
+        } else if (action == App::NavigationAction::Confirm &&
+                   stationState_ != nullptr && stationState_->count > 0) {
+            const std::size_t index = StationsScreen::selectedIndex();
+            if (index < stationState_->count) {
+                selectedStation_ = stationState_->stations[index];
+                selectedStationValid_ = true;
+                show(App::ScreenId::StationDetail);
+            }
+        }
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::StationDetail) {
+        if (action == App::NavigationAction::Confirm &&
+            selectedStationValid_ && selectedStation_.hasPosition) {
+            show(App::ScreenId::StationNavigation);
+        }
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::StationNavigation) {
+        if (action == App::NavigationAction::Confirm) {
+            show(App::ScreenId::StationDetail);
+        }
         return;
     }
 
@@ -268,6 +329,15 @@ void ScreenManager::handleNavigation(App::NavigationAction action) {
             TrackerScreen::save();
         } else if (action == App::NavigationAction::Up || action == App::NavigationAction::Down) {
             TrackerScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
+        }
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::Trail) {
+        if (action == App::NavigationAction::Confirm) {
+            TrailScreen::togglePause();
+        } else if (action == App::NavigationAction::Up || action == App::NavigationAction::Down) {
+            TrailScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
         }
         return;
     }
@@ -317,6 +387,7 @@ void ScreenManager::show(App::ScreenId screen) {
             makeMenuIndicators(
                 gpsState_,
                 trackerState_,
+                trailState_,
                 digiIgateState_,
                 unreadMessageCount_,
                 newStationCount_));
@@ -329,6 +400,16 @@ void ScreenManager::show(App::ScreenId screen) {
         GpsScreen::update(gpsState_);
     } else if (screen == App::ScreenId::Stations) {
         StationsScreen::create();
+    } else if (screen == App::ScreenId::StationDetail) {
+        StationDetailScreen::create();
+        if (selectedStationValid_) {
+            StationDetailScreen::update(selectedStation_, referenceState_, millis());
+        }
+    } else if (screen == App::ScreenId::StationNavigation) {
+        StationNavigationScreen::create();
+        if (selectedStationValid_) {
+            StationNavigationScreen::update(selectedStation_, referenceState_, millis());
+        }
     } else if (screen == App::ScreenId::Weather) {
         WeatherScreen::create();
     } else if (screen == App::ScreenId::Tracker) {
@@ -338,6 +419,11 @@ void ScreenManager::show(App::ScreenId screen) {
             trackerState_,
             trackerSaveHandler_,
             trackerSaveContext_);
+    } else if (screen == App::ScreenId::Trail) {
+        TrailScreen::create(trailState_, commandHandler_, commandContext_);
+    } else if (screen == App::ScreenId::Power) {
+        PowerScreen::create();
+        PowerScreen::update(powerState_);
     } else if (screen == App::ScreenId::DigiIgate) {
         DigiIgateScreen::create(
             settingsState_,
@@ -354,6 +440,7 @@ void ScreenManager::show(App::ScreenId screen) {
         PlaceholderScreen::create(item.title, item.description);
     }
     rebuildNavigationBar();
+    updateHeaderPower(powerState_);
 }
 
 void ScreenManager::showMainMenu() {
@@ -367,6 +454,26 @@ void ScreenManager::showTarget(App::ScreenId target) {
 void ScreenManager::rebuildNavigationBar() {
     if (currentScreen_ != App::ScreenId::Splash) {
         createNavigationBar(navigationThunk, this);
+    }
+}
+
+void ScreenManager::refreshSelectedStation() {
+    if (!selectedStationValid_) {
+        return;
+    }
+    if (stationState_ == nullptr) {
+        return;
+    }
+    for (std::size_t index = 0; index < stationState_->count; ++index) {
+        const Services::StationStore::Station& candidate = stationState_->stations[index];
+        const bool sameType = candidate.type == selectedStation_.type;
+        const bool sameIdentity = candidate.type == Aprs::EntityType::Station
+            ? std::strcmp(candidate.callsign, selectedStation_.callsign) == 0
+            : std::strcmp(candidate.entityName, selectedStation_.entityName) == 0;
+        if (sameType && sameIdentity) {
+            selectedStation_ = candidate;
+            return;
+        }
     }
 }
 

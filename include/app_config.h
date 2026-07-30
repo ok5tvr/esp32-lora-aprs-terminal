@@ -5,7 +5,7 @@
 namespace AppConfig {
 
 constexpr char FIRMWARE_NAME[] = "LoRa APRS Terminal";
-constexpr char FIRMWARE_VERSION[] = "1.0.5";
+constexpr char FIRMWARE_VERSION[] = "1.3.0";
 constexpr char BOARD_NAME[] = "Waveshare ESP32-Touch-LCD-3.5";
 
 // Defaults used when no values have yet been saved in NVS.
@@ -27,13 +27,34 @@ constexpr std::uint16_t LVGL_BUFFER_LINES = 12;
 constexpr std::uint32_t MAIN_LOOP_DELAY_MS = 2;
 constexpr std::uint32_t UI_REFRESH_INTERVAL_MS = 250;
 constexpr std::uint32_t RADIO_TX_TIMEOUT_MS = 15000;
+constexpr std::uint32_t RADIO_TX_MIN_GAP_MS = 180;
+constexpr std::uint32_t RADIO_RECOVERY_RETRY_MS = 5000;
+constexpr std::uint8_t RADIO_RECOVERY_RX_ERROR_THRESHOLD = 3;
 constexpr std::uint32_t SD_SPI_FREQUENCY_HZ = 20000000;
+
+// AXP2101 power telemetry. Values are read-only; the firmware does not alter
+// charger current, target voltage, or PMIC output rails.
+constexpr std::uint32_t POWER_POLL_INTERVAL_MS = 2000;
+constexpr std::uint8_t POWER_CRITICAL_PERCENT = 10;
+constexpr std::uint16_t POWER_CRITICAL_VOLTAGE_MV = 3400;
 
 constexpr std::uint32_t TRACKER_DEFAULT_INTERVAL_SECONDS = 300;
 constexpr std::uint32_t TRACKER_MIN_INTERVAL_SECONDS = 30;
 constexpr std::uint32_t TRACKER_MAX_INTERVAL_SECONDS = 3600;
 constexpr std::uint32_t TRACKER_START_DELAY_MS = 2000;
 constexpr std::uint32_t MANUAL_BEACON_REQUEST_TIMEOUT_MS = 15000;
+
+// Stopař route logger. SD writes are intentionally sparse and buffered so
+// radio RX and APRS tracker processing remain the highest-priority loop work.
+constexpr std::uint32_t TRAIL_SAMPLE_INTERVAL_MS = 5000;
+constexpr std::uint32_t TRAIL_MAX_POINT_INTERVAL_MS = 30000;
+constexpr double TRAIL_MIN_POINT_DISTANCE_METERS = 3.0;
+constexpr std::uint32_t TRAIL_AUTOPAUSE_DELAY_MS = 30000;
+constexpr float TRAIL_RESUME_SPEED_KMH = 2.0F;
+constexpr double TRAIL_RESUME_DISTANCE_METERS = 8.0;
+constexpr double TRAIL_MAX_POINT_JUMP_KM = 2.0;
+constexpr std::uint32_t TRAIL_FLUSH_INTERVAL_MS = 15000;
+constexpr std::uint32_t TRAIL_FLUSH_AFTER_LINES = 8;
 
 constexpr std::uint32_t BUTTON_DEBOUNCE_MS = 35;
 constexpr std::uint32_t BUTTON_MIN_CLICK_MS = 40;

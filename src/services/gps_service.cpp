@@ -42,20 +42,85 @@ bool GpsService::begin() {
     return true;
 }
 
+void GpsService::finishDiagnosticSentence(std::uint32_t now) {
+    if (!sentenceInProgress_) {
+        return;
+    }
+
+    // A valid diagnostic line must contain more than the start delimiter.
+    // This also prevents a lone '$' caused by UART noise from replacing the
+    // previously completed sentence.
+    if (currentSentenceLength_ > 1U) {
+        sentenceSeen_ = true;
+        lastSentenceAt_ = now;
+        ++sentenceCount_;
+
+        if (sentenceTypeLength_ > 0U) {
+            std::snprintf(
+                view_.lastSentenceType,
+                sizeof(view_.lastSentenceType),
+                "%s",
+                sentenceTypeBuffer_);
+        }
+
+        std::snprintf(
+            view_.lastNmeaSentence,
+            sizeof(view_.lastNmeaSentence),
+            "%s",
+            currentSentenceBuffer_);
+    }
+
+    collectingSentenceType_ = false;
+    sentenceInProgress_ = false;
+    sentenceTypeLength_ = 0;
+    sentenceTypeBuffer_[0] = '\0';
+    currentSentenceLength_ = 0;
+    currentSentenceBuffer_[0] = '\0';
+}
+
 void GpsService::processDiagnosticCharacter(char value, std::uint32_t now) {
     byteSeen_ = true;
     lastByteAt_ = now;
 
     if (value == '$') {
+        // A new '$' always starts a fresh NMEA sentence. If the previous line
+        // was not terminated, discard it rather than combining two frames.
         sentenceInProgress_ = true;
         collectingSentenceType_ = true;
         sentenceTypeLength_ = 0;
         sentenceTypeBuffer_[0] = '\0';
+        currentSentenceLength_ = 1;
+        currentSentenceBuffer_[0] = '$';
+        currentSentenceBuffer_[1] = '\0';
         return;
     }
 
+    if (!sentenceInProgress_) {
+        return;
+    }
+
+    // Different receivers use CRLF, LF-only or occasionally CR-only line
+    // endings. Complete the line on either terminator. With CRLF the LF is
+    // ignored because finishDiagnosticSentence() clears sentenceInProgress_.
+    if (value == '\r' || value == '\n') {
+        finishDiagnosticSentence(now);
+        return;
+    }
+
+    // Never store NUL or other control bytes in a C string. A single embedded
+    // NUL directly after '$' would make LVGL display only the dollar sign.
+    const unsigned char byte = static_cast<unsigned char>(value);
+    if (byte < 0x20U || byte > 0x7EU) {
+        return;
+    }
+
+    if (currentSentenceLength_ + 1U < sizeof(currentSentenceBuffer_)) {
+        currentSentenceBuffer_[currentSentenceLength_++] = value;
+        currentSentenceBuffer_[currentSentenceLength_] = '\0';
+    }
+
     if (collectingSentenceType_) {
-        if (value == ',' || value == '*' || value == '\r' || value == '\n') {
+        if (value == ',' || value == '*') {
             collectingSentenceType_ = false;
         } else if (sentenceTypeLength_ < 5U) {
             sentenceTypeBuffer_[sentenceTypeLength_++] = value;
@@ -63,23 +128,6 @@ void GpsService::processDiagnosticCharacter(char value, std::uint32_t now) {
         } else {
             collectingSentenceType_ = false;
         }
-    }
-
-    if (value == '\n') {
-        if (sentenceInProgress_) {
-            sentenceSeen_ = true;
-            lastSentenceAt_ = now;
-            ++sentenceCount_;
-        }
-        if (sentenceInProgress_ && sentenceTypeLength_ > 0U) {
-            std::snprintf(
-                view_.lastSentenceType,
-                sizeof(view_.lastSentenceType),
-                "%s",
-                sentenceTypeBuffer_);
-        }
-        collectingSentenceType_ = false;
-        sentenceInProgress_ = false;
     }
 }
 

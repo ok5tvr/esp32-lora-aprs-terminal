@@ -1,6 +1,8 @@
 #include "ui/ui_components.h"
 
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 
 #include "board_pins.h"
 #include "ui/ui_styles.h"
@@ -10,6 +12,17 @@ namespace {
 
 NavigationHandler currentHandler = nullptr;
 void* currentContext = nullptr;
+lv_obj_t* headerPowerLabel = nullptr;
+
+void formatVoltageCz(char* output, std::size_t capacity, std::uint16_t millivolts) {
+    if (output == nullptr || capacity == 0U) {
+        return;
+    }
+    std::snprintf(output, capacity, "%.2f", static_cast<double>(millivolts) / 1000.0);
+    if (char* decimal = std::strchr(output, '.')) {
+        *decimal = ',';
+    }
+}
 
 void navigationEvent(lv_event_t* event) {
     if (lv_event_get_code(event) != LV_EVENT_CLICKED || currentHandler == nullptr) {
@@ -22,8 +35,12 @@ void navigationEvent(lv_event_t* event) {
 void createButton(lv_obj_t* parent, const char* text, App::NavigationAction action) {
     lv_obj_t* button = lv_btn_create(parent);
     lv_obj_set_size(button, 110, 52);
-    lv_obj_add_style(button, &Styles::navigationButton(), static_cast<lv_style_selector_t>(LV_PART_MAIN | LV_STATE_DEFAULT));
-    lv_obj_add_style(button, &Styles::navigationButtonPressed(), static_cast<lv_style_selector_t>(LV_PART_MAIN | LV_STATE_PRESSED));
+    const auto defaultSelector = static_cast<lv_style_selector_t>(
+        static_cast<std::uint32_t>(LV_PART_MAIN) | static_cast<std::uint32_t>(LV_STATE_DEFAULT));
+    const auto pressedSelector = static_cast<lv_style_selector_t>(
+        static_cast<std::uint32_t>(LV_PART_MAIN) | static_cast<std::uint32_t>(LV_STATE_PRESSED));
+    lv_obj_add_style(button, &Styles::navigationButton(), defaultSelector);
+    lv_obj_add_style(button, &Styles::navigationButtonPressed(), pressedSelector);
     lv_obj_add_event_cb(
         button,
         navigationEvent,
@@ -41,6 +58,7 @@ void createButton(lv_obj_t* parent, const char* text, App::NavigationAction acti
 void resetScreen() {
     lv_obj_t* screen = lv_scr_act();
     lv_obj_clean(screen);
+    headerPowerLabel = nullptr;
     lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(screen, lv_color_hex(0x0B1424), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
@@ -62,6 +80,75 @@ void createHeader(const char* title) {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_22, 0);
     lv_obj_set_style_text_color(label, lv_color_hex(0xF4F7FF), 0);
     lv_obj_align(label, LV_ALIGN_LEFT_MID, 14, 0);
+
+    headerPowerLabel = lv_label_create(header);
+    lv_obj_set_width(headerPowerLabel, 148);
+    lv_label_set_long_mode(headerPowerLabel, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(headerPowerLabel, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_font(headerPowerLabel, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(headerPowerLabel, lv_color_hex(0x92A7C7), 0);
+    lv_obj_align(headerPowerLabel, LV_ALIGN_RIGHT_MID, -12, 0);
+    lv_label_set_text(headerPowerLabel, "PWR --");
+}
+
+void updateHeaderPower(const Services::PowerService::ViewState& state) {
+    if (headerPowerLabel == nullptr) {
+        return;
+    }
+
+    if (!state.available) {
+        lv_label_set_text(headerPowerLabel, "PWR --");
+        lv_obj_set_style_text_color(headerPowerLabel, lv_color_hex(0x46566E), 0);
+        return;
+    }
+
+    const char* symbol = LV_SYMBOL_BATTERY_EMPTY;
+    if (state.charging) {
+        symbol = LV_SYMBOL_CHARGE;
+    } else if (state.vbusConnected) {
+        symbol = LV_SYMBOL_USB;
+    } else if (state.batteryPercent >= 80U) {
+        symbol = LV_SYMBOL_BATTERY_FULL;
+    } else if (state.batteryPercent >= 55U) {
+        symbol = LV_SYMBOL_BATTERY_3;
+    } else if (state.batteryPercent >= 30U) {
+        symbol = LV_SYMBOL_BATTERY_2;
+    } else if (state.batteryPercent >= 12U) {
+        symbol = LV_SYMBOL_BATTERY_1;
+    }
+
+    char text[64];
+    char voltage[12];
+    if (state.batteryConnected) {
+        formatVoltageCz(voltage, sizeof(voltage), state.batteryVoltageMv);
+        if (state.batteryPercentValid) {
+            std::snprintf(
+                text,
+                sizeof(text),
+                "%u%%  %sV  %s",
+                static_cast<unsigned>(state.batteryPercent),
+                voltage,
+                symbol);
+        } else {
+            std::snprintf(text, sizeof(text), "--%%  %sV  %s", voltage, symbol);
+        }
+    } else if (state.vbusConnected) {
+        formatVoltageCz(voltage, sizeof(voltage), state.vbusVoltageMv);
+        std::snprintf(text, sizeof(text), "USB  %sV  %s", voltage, symbol);
+    } else {
+        std::snprintf(text, sizeof(text), "BAT --  %s", symbol);
+    }
+    lv_label_set_text(headerPowerLabel, text);
+
+    lv_color_t color = lv_color_hex(0xF4F7FF);
+    if (state.criticalBattery) {
+        color = lv_color_hex(0xF05B67);
+    } else if (state.charging) {
+        color = lv_color_hex(0x42D392);
+    } else if (state.vbusConnected) {
+        color = lv_color_hex(0x56C7FF);
+    }
+    lv_obj_set_style_text_color(headerPowerLabel, color, 0);
 }
 
 void createNavigationBar(NavigationHandler handler, void* context) {

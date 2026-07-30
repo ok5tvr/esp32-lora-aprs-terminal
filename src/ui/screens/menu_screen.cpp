@@ -33,6 +33,8 @@ lv_obj_t* stationBadge = nullptr;
 lv_obj_t* stationBadgeLabel = nullptr;
 lv_obj_t* trackerBox = nullptr;
 lv_obj_t* trackerImage = nullptr;
+lv_obj_t* trailBox = nullptr;
+lv_obj_t* trailGlyph = nullptr;
 lv_obj_t* digiBox = nullptr;
 lv_obj_t* digiImage = nullptr;
 lv_obj_t* igateBox = nullptr;
@@ -213,6 +215,16 @@ void renderIndicators(const IndicatorState& indicators) {
     }
     setAprsIndicatorColor(trackerBox, trackerImage, nullptr, trackerColor);
 
+    lv_color_t trailColor = inactive;
+    if (indicators.trailError) {
+        trailColor = colorFromHex(0xF05B67);
+    } else if (indicators.trailRecording) {
+        trailColor = colorFromHex(0x42D392);
+    } else if (indicators.trailPaused || indicators.trailConfigured) {
+        trailColor = colorFromHex(0xFFB547);
+    }
+    setIndicatorColor(trailBox, trailGlyph, trailColor);
+
     const lv_color_t digiColor = indicators.digiEnabled
         ? colorFromHex(0xB59AFF)
         : inactive;
@@ -306,8 +318,9 @@ void create(
     stationBox = createIndicatorBox(150, LV_SYMBOL_WIFI, stationGlyph);
     createBadge(stationBox, stationBadge, stationBadgeLabel);
     trackerBox = createAprsIndicatorBox(184, &AprsIconAssets::car, trackerImage);
-    digiBox = createAprsIndicatorBox(218, &AprsIconAssets::digipeater, digiImage);
-    igateBox = createAprsIndicatorBox(252, &AprsIconAssets::gateway, igateImage, "L", &igateOverlay);
+    trailBox = createIndicatorBox(218, LV_SYMBOL_SAVE, trailGlyph);
+    digiBox = createAprsIndicatorBox(252, &AprsIconAssets::digipeater, digiImage);
+    igateBox = createAprsIndicatorBox(286, &AprsIconAssets::gateway, igateImage, "L", &igateOverlay);
     renderIndicators(indicators);
 
     locatorLabel = lv_label_create(lv_scr_act());
@@ -315,7 +328,7 @@ void create(
     lv_label_set_long_mode(locatorLabel, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_align(locatorLabel, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_style_text_font(locatorLabel, &lv_font_montserrat_16, 0);
-    lv_obj_align(locatorLabel, LV_ALIGN_TOP_RIGHT, -14, 16);
+    lv_obj_align(locatorLabel, LV_ALIGN_BOTTOM_RIGHT, -14, -72);
     renderedReferenceRevision = 0xFFFFFFFFU;
     renderLocator(reference);
 
@@ -346,11 +359,11 @@ void create(
     }
 
     statusLabel = lv_label_create(lv_scr_act());
-    lv_obj_set_width(statusLabel, 440);
+    lv_obj_set_width(statusLabel, 304);
     lv_label_set_long_mode(statusLabel, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_font(statusLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(statusLabel, colorFromHex(0x92A7C7), 0);
-    lv_obj_align(statusLabel, LV_ALIGN_BOTTOM_MID, 0, -72);
+    lv_obj_align(statusLabel, LV_ALIGN_BOTTOM_LEFT, 14, -72);
 
     refresh();
 }

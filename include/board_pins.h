@@ -24,6 +24,7 @@ constexpr int I2C_SDA = 21;
 constexpr int I2C_SCL = 22;
 constexpr std::uint8_t TCA9554_ADDRESS = 0x20;
 constexpr std::uint8_t TOUCH_ADDRESS = 0x38;
+constexpr int PMU_IRQ = 35;  // AXP2101 interrupt output (input-only GPIO).
 constexpr std::uint8_t TCA_RESET_OUTPUT_0 = 0;
 constexpr std::uint8_t TCA_RESET_OUTPUT_1 = 1;
 
@@ -34,14 +35,22 @@ constexpr int LORA_SCLK = 14;
 constexpr int LORA_MOSI = 26;
 constexpr int LORA_CS = 33;
 constexpr int LORA_RESET = 32;
-constexpr int LORA_DIO0 = 4;  // Shares the optional audio I2S pin; audio must remain disabled.
+// GPIO2 is a boot-strapping pin. RA-02 DIO0 is normally low during reset;
+// add an external 10 kOhm pulldown to GND for reliable firmware upload.
+// The optional onboard I2S audio must remain disabled because it also uses GPIO2.
+constexpr int LORA_DIO0 = 2;
 constexpr int LORA_DIO1 = -1;  // DIO0 is sufficient for RX/TX interrupts.
 
 // Optional NMEA GPS receiver. Only the GPS TX output is required and is
-// connected to ESP32 GPIO17 (UART2 RX). The ESP32 TX line is intentionally
-// unused, so the GPS cannot interfere with firmware upload on UART0.
-constexpr int GPS_RX = 17;
+// connected to ESP32 GPIO4 (UART2 RX). GPIO4 is also an optional I2S audio
+// signal on this board, therefore the onboard audio interface must remain disabled.
+// The ESP32 TX line is intentionally unused.
+constexpr int GPS_RX = 4;
 constexpr int GPS_TX = -1;
+
+static_assert(GPS_RX != LORA_DIO0, "GPS RX and LoRa DIO0 must use different GPIOs");
+static_assert(GPS_RX != LORA_CS, "GPS RX conflicts with LoRa chip select");
+static_assert(GPS_RX != LORA_RESET, "GPS RX conflicts with LoRa reset");
 
 // Onboard BOOT button. It is a boot-strapping input only during reset; while
 // the firmware is running it can be read as a normal active-low button.

@@ -20,6 +20,7 @@ public:
         double defaultLatitude = 0.0;
         double defaultLongitude = 0.0;
         bool trackerEnabled = false;
+        bool trailEnabled = false;
         App::TrackerPositionSource trackerSource = App::TrackerPositionSource::Gps;
         App::TrackerPositionFormat trackerFormat = App::TrackerPositionFormat::Uncompressed;
         App::TrackerBeaconMode trackerMode = App::TrackerBeaconMode::FixedInterval;
@@ -48,6 +49,7 @@ public:
         std::size_t errorTextCapacity);
     bool saveTracker(
         bool enabled,
+        bool trailEnabled,
         App::TrackerPositionSource source,
         App::TrackerPositionFormat format,
         App::TrackerBeaconMode mode,

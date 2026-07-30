@@ -63,6 +63,14 @@ bool AppController::begin() {
     if (!Drivers::Display::begin()) {
         halt("Display initialization failed");
     }
+
+    // Display initialization starts the shared board I2C bus. Initialize the
+    // AXP2101 before the FT6336 touch driver so both clients keep using the
+    // final Wire configuration selected by XPowersLib.
+    if (!power_.begin()) {
+        LOG_E("APP", "AXP2101 telemetry unavailable; terminal remains active");
+    }
+
     if (!Drivers::Touch::begin()) {
         halt("Touch initialization failed");
     }
@@ -92,6 +100,7 @@ bool AppController::begin() {
     }
 
     tracker_.begin();
+    trail_.begin();
     updateReferencePosition();
     screens_.begin(
         commandThunk,
@@ -128,6 +137,8 @@ void AppController::update() {
         radio_.update(now, settings_.viewState());
     }
     tracker_.update(now, settings_.viewState(), gps_.viewState(), radio_);
+    trail_.update(now, settings_.viewState().trailEnabled, gps_.viewState());
+    power_.update(now);
     updateReferencePosition();
 
     screens_.update(
@@ -138,6 +149,8 @@ void AppController::update() {
         radio_.weatherViewState(),
         gps_.viewState(),
         tracker_.viewState(),
+        trail_.viewState(),
+        power_.viewState(),
         radio_.digiIgateViewState(),
         referencePosition_,
         settings_.viewState());
@@ -145,7 +158,7 @@ void AppController::update() {
     const Services::TrackerService::ViewState& trackerState = tracker_.viewState();
     if (trackerState.manualPacketsSent != observedManualPacketsSent_) {
         observedManualPacketsSent_ = trackerState.manualPacketsSent;
-        screens_.setMessage("BOOT: pozicni beacon byl odeslan.");
+        screens_.setMessage("BOOT: pozicni beacon byl zarazen do TX fronty.");
     } else if (trackerState.manualBeaconFailures != observedManualBeaconFailures_) {
         observedManualBeaconFailures_ = trackerState.manualBeaconFailures;
         screens_.setMessage(trackerState.statusText);
@@ -233,6 +246,7 @@ bool AppController::digiIgateSettingsSaveThunk(
 
 bool AppController::trackerSettingsSaveThunk(
     bool enabled,
+    bool trailEnabled,
     TrackerPositionSource source,
     TrackerPositionFormat format,
     TrackerBeaconMode mode,
@@ -247,6 +261,7 @@ bool AppController::trackerSettingsSaveThunk(
     }
     return static_cast<AppController*>(context)->saveTrackerSettings(
         enabled,
+        trailEnabled,
         source,
         format,
         mode,
@@ -305,6 +320,7 @@ bool AppController::saveDigiIgateSettings(
 
 bool AppController::saveTrackerSettings(
     bool enabled,
+    bool trailEnabled,
     TrackerPositionSource source,
     TrackerPositionFormat format,
     TrackerBeaconMode mode,
@@ -322,9 +338,14 @@ bool AppController::saveTrackerSettings(
         copyError(errorText, errorTextCapacity, "Tracker nelze zapnout: GPS nebyla nalezena.");
         return false;
     }
+    if (trailEnabled && !Drivers::SdCard::status().mounted) {
+        copyError(errorText, errorTextCapacity, "Stopar nelze zapnout: SD karta neni dostupna.");
+        return false;
+    }
 
     return settings_.saveTracker(
         enabled,
+        trailEnabled,
         source,
         format,
         mode,
@@ -358,13 +379,17 @@ void AppController::handleCommand(Command command) {
             screens_.setMessage("Radio neni inicializovano.");
             return;
         }
-        if (radio_.viewState().transmitting) {
-            screens_.setMessage("Predchozi paket se jeste vysila.");
-            return;
-        }
         const bool started = radio_.sendTestPacket(settings_.viewState().callsign, millis());
-        screens_.setMessage(started ? "Testovaci APRS paket byl zarazen k vysilani."
-                                    : "Vysilani se nepodarilo spustit.");
+        screens_.setMessage(started ? "Testovaci APRS paket byl zarazen do TX fronty."
+                                    : "Test nelze zaradit: TX fronta je plna.");
+    } else if (command == Command::ToggleTrailPause) {
+        char message[128] = {};
+        trail_.toggleManualPause(
+            millis(),
+            gps_.viewState(),
+            message,
+            sizeof(message));
+        screens_.setMessage(message);
     }
 }
 

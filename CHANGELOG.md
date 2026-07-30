@@ -1,3 +1,83 @@
+# Changelog
+
+## 1.3.0
+
+- added a fixed eight-entry central RF TX queue with deterministic priorities: ACK, outgoing message, DIGI, manual beacon, tracker and test
+- kept FIFO ordering inside equal priorities and replaced stale queued scheduled-tracker frames with the newest position
+- allowed higher-priority traffic to evict a lower-priority queued frame when the queue is full
+- routed APRS message ACK/retries, digipeater frames, tracker/manual beacons and test packets through the same non-blocking scheduler
+- expanded the LoRa page into a diagnostics view with APRS/decode counters, queue depth/max/drop/replacement counters, TX source and recovery statistics
+- added automatic SX1278-only recovery after initialization failure, TX timeout or three consecutive RX read errors, rate-limited to five seconds
+- preserved lifetime RX/TX/error counters across radio recovery
+- added keyboard/button selection to the heard-entity list and an entity detail page with age, packet count, position, RSSI, SNR and last TNC2 frame
+- added live distance and true-bearing navigation to a positioned station/object/item using GPS or the configured default reference
+- retained the verified ATGM336H GPIO4, RA-02 DIO0 GPIO2 and 9600-baud hardware configuration
+
+## 1.2.5
+
+- moved ATGM336H GPS UART2 RX from GPIO17 to GPIO4 because GPIO17 is reserved by onboard PSRAM on this classic ESP32 board
+- moved RA-02 / SX1278 DIO0 from GPIO4 to GPIO2; all other RA-02 connections remain unchanged
+- restored the GPS serial speed to the ATGM336H default of 9600 baud, 8-N-1
+- configured GPIO2 with an internal pulldown before RadioLib startup and documented the recommended external 10 kOhm pulldown for reset/upload reliability
+- documented the requirement to keep onboard I2S audio disabled
+- kept GPS sentence capture, tracker, Stopař, power telemetry and APRS processing unchanged
+
+## 1.2.4
+
+- changed the GPS UART2 receive speed from 9600 to 4800 baud
+- kept the baud rate centralized in `AppConfig::GPS_BAUD_RATE`, so GPS startup logs and diagnostics show the same configured value
+- clarified that the connected GPS receiver must already output NMEA at 4800 baud; this firmware change does not send a vendor-specific reconfiguration command to the module
+
+## 1.2.3
+
+- Fixed GPS diagnostic NMEA capture when UART contains embedded NUL/control bytes.
+- NMEA sentences now finish on CR or LF and a lone `$` no longer replaces the previous line.
+- The NMEA display uses a fixed two-line wrapping area.
+
+## 1.2.2
+
+- fixed the GPS diagnostics build by using the enabled Montserrat 14 font instead of unavailable Montserrat 12
+- retained single-line ellipsis handling for the latest NMEA sentence
+- removed deprecated mixed-enum bitwise warnings when creating navigation-button style selectors
+
+## 1.2.1
+
+- replaced the final GPS diagnostics counter row with the latest complete received NMEA sentence
+- retained the complete sentence from `$` through its checksum while removing trailing CR/LF characters
+- added a fixed 128-byte capture buffer and safe truncation for unusually long proprietary NMEA messages
+- rendered the live sentence in a smaller single-line font with LVGL ellipsis protection
+- added a host-side regression test for GNRMC/GPGGA sentence capture and sentence replacement
+
+## 1.2.0
+
+- added a read-only `PowerService` for the onboard AXP2101 over I2C
+- added battery presence, state-of-charge, battery voltage, VBUS voltage,
+  system voltage and internal PMIC-temperature readings
+- added charging/discharging/standby/USB supply state and AXP2101 charger-phase decoding
+- added display of configured charger current and target charge voltage without changing either setting
+- added a permanent header summary with battery percentage, Czech decimal voltage and a battery, charge or USB symbol
+- added green charging, blue USB and red critical-battery header states
+- added a dedicated **Napajeni** main-menu page with live measurements and the latest detected power event
+- added validation of PMIC percentage, voltage and temperature values before display
+- added configurable two-second polling and 10 percent / 3.40 V critical thresholds
+- kept GPS, LoRa receive, tracker and Stopar processing ahead of power polling in the main loop
+- added XPowersLib 0.3.3 as an explicit PlatformIO dependency
+
+## 1.1.0
+
+- added the independent **Stopar** GPS route logger, enabled persistently from the Tracker page
+- added a dedicated Stopar main-menu page with live state, active filename, point count, distance, duration and dropped-line counter
+- added manual pause/resume using the touchscreen or the existing OK navigation action
+- added autopause after 30 seconds without movement and automatic resume at 2 km/h or after an 8 metre displacement
+- added semicolon-separated TXT route logs under `/STOPAR`, named from GPS UTC date/time
+- added event records for start, stop, automatic pause/resume and manual pause/resume
+- added a newest-first list of up to eight TXT logs with live file sizes
+- added a compact save-state indicator to the main header
+- added persistent NVS storage for the Stopar enable switch
+- kept GPS, radio receive and APRS tracker handling ahead of SD writes in the main loop
+- added a fixed 12-line RAM queue, one-line-per-loop SD writes and batched flushes to limit blocking
+- added host-side mock-SD tests for session creation, autopause, resume, manual pause and log content
+
 ## 1.0.5
 
 - Added a car APRS icon (`/>`) to the main header for tracker state.
@@ -32,7 +112,6 @@
 - RESET and PWR retain their original hardware functions.
 - Retained LoRa payload CRC disabled with `radio_.setCRC(false)`.
 
-# Changelog
 
 ## 1.0.2
 

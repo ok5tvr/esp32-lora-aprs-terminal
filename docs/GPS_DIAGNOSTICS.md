@@ -1,6 +1,6 @@
 # GPS diagnostics and Maidenhead locator
 
-Firmware 0.9.2 extends the GPS page with live NMEA diagnostics.
+Firmware 1.2.1 extends the GPS page with the latest complete received NMEA sentence.
 
 ## Detection states
 
@@ -23,7 +23,7 @@ The default detection timeout is 10 seconds. A position fix is considered curren
 - six-character Maidenhead locator
 - speed, course and 16-point cardinal direction
 - satellites, HDOP, UTC time and date
-- sentence count, characters per second and checksum counters
+- latest complete received NMEA sentence, including `$` and checksum but without CR/LF
 
 ## Main menu
 
@@ -33,3 +33,11 @@ The main header shows the locator of the active reference position:
 - `DEF JN69PS` when the configured default position is used
 
 The locator is recalculated whenever the reference position changes.
+
+## Live sentence row
+
+The final diagnostics row displays the most recently completed NMEA sentence.
+The service updates the row only after the terminating CR or LF is received, so a
+partially received sentence is never shown. Standard CR/LF terminators are not
+stored. The fixed 128-byte buffer safely truncates unusually long proprietary
+sentences, while the LVGL label uses a smaller font and ellipsis protection.

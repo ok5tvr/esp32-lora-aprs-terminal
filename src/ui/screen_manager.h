@@ -6,8 +6,10 @@
 #include "app/app_types.h"
 #include "services/geo_utils.h"
 #include "services/gps_service.h"
+#include "services/power_service.h"
 #include "services/radio_service.h"
 #include "services/settings_service.h"
+#include "services/trail_service.h"
 #include "services/tracker_service.h"
 
 namespace Ui {
@@ -33,6 +35,8 @@ public:
         const Services::WeatherStore::ViewState& weatherState,
         const Services::GpsService::ViewState& gpsState,
         const Services::TrackerService::ViewState& trackerState,
+        const Services::TrailService::ViewState& trailState,
+        const Services::PowerService::ViewState& powerState,
         const Services::DigiIgateService::ViewState& digiIgateState,
         const Services::PositionReference& reference,
         const Services::SettingsService::ViewState& settingsState);
@@ -47,6 +51,7 @@ private:
     void showMainMenu();
     void showTarget(App::ScreenId target);
     void rebuildNavigationBar();
+    void refreshSelectedStation();
 
     App::CommandHandler commandHandler_ = nullptr;
     void* commandContext_ = nullptr;
@@ -60,7 +65,12 @@ private:
     void* trackerSaveContext_ = nullptr;
     Services::SettingsService::ViewState settingsState_;
     Services::GpsService::ViewState gpsState_;
+    const Services::StationStore::ViewState* stationState_ = nullptr;
+    Services::StationStore::Station selectedStation_;
+    bool selectedStationValid_ = false;
     Services::TrackerService::ViewState trackerState_;
+    Services::TrailService::ViewState trailState_;
+    Services::PowerService::ViewState powerState_;
     Services::DigiIgateService::ViewState digiIgateState_;
     Services::PositionReference referenceState_;
     App::ScreenId currentScreen_ = App::ScreenId::Splash;

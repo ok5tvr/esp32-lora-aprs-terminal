@@ -15,11 +15,13 @@ int main() {
     station.alive = true;
     std::snprintf(station.source, sizeof(station.source), "OK1AAA-1");
     std::snprintf(station.entityName, sizeof(station.entityName), "OK1AAA-1");
-    assert(stations.ingest(station, -80.0F, 7.0F, 100U));
+    assert(stations.ingest(station, -80.0F, 7.0F, 100U, "OK1AAA-1>APRS:>first"));
+    assert(std::strcmp(stations.viewState().stations[0].lastFrame, "OK1AAA-1>APRS:>first") == 0);
     assert(stations.viewState().discoveredEntities == 1U);
 
     // A repeated packet updates history but is not a newly discovered entity.
-    assert(stations.ingest(station, -79.0F, 8.0F, 200U));
+    assert(stations.ingest(station, -79.0F, 8.0F, 200U, "OK1AAA-1>APRS:>updated"));
+    assert(std::strcmp(stations.viewState().stations[0].lastFrame, "OK1AAA-1>APRS:>updated") == 0);
     assert(stations.viewState().discoveredEntities == 1U);
 
     std::snprintf(station.source, sizeof(station.source), "OK1BBB-2");

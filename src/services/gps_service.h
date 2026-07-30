@@ -42,6 +42,7 @@ public:
         std::uint8_t utcMonth = 0;
         std::uint16_t utcYear = 0;
         char lastSentenceType[7] = "--";
+        char lastNmeaSentence[128] = "--";
         char locator[7] = "";
         std::uint32_t revision = 0;
     };
@@ -52,6 +53,7 @@ public:
 
 private:
     void processDiagnosticCharacter(char value, std::uint32_t now);
+    void finishDiagnosticSentence(std::uint32_t now);
 
     HardwareSerial serial_{2};
     TinyGPSPlus parser_;
@@ -71,6 +73,8 @@ private:
     bool sentenceInProgress_ = false;
     char sentenceTypeBuffer_[7] = {};
     std::uint8_t sentenceTypeLength_ = 0;
+    char currentSentenceBuffer_[128] = {};
+    std::uint8_t currentSentenceLength_ = 0;
 };
 
 }  // namespace Services

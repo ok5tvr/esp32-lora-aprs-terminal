@@ -20,7 +20,7 @@ lv_obj_t* positionLabel = nullptr;
 lv_obj_t* locatorLabel = nullptr;
 lv_obj_t* movementLabel = nullptr;
 lv_obj_t* qualityLabel = nullptr;
-lv_obj_t* countersLabel = nullptr;
+lv_obj_t* sentenceLabel = nullptr;
 std::uint32_t renderedRevision = 0xFFFFFFFFU;
 
 void styleValue(lv_obj_t* label, lv_coord_t y, lv_color_t color = lv_color_hex(0xBDCAE0)) {
@@ -66,8 +66,12 @@ void create() {
     qualityLabel = lv_label_create(lv_scr_act());
     styleValue(qualityLabel, 192);
 
-    countersLabel = lv_label_create(lv_scr_act());
-    styleValue(countersLabel, 219, lv_color_hex(0x92A7C7));
+    sentenceLabel = lv_label_create(lv_scr_act());
+    lv_obj_set_size(sentenceLabel, 452, 42);
+    lv_label_set_long_mode(sentenceLabel, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_font(sentenceLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(sentenceLabel, lv_color_hex(0x92A7C7), 0);
+    lv_obj_align(sentenceLabel, LV_ALIGN_TOP_LEFT, 14, 219);
 
     renderedRevision = 0xFFFFFFFFU;
 }
@@ -194,15 +198,11 @@ void update(const Services::GpsService::ViewState& state) {
     }
     lv_label_set_text(qualityLabel, text);
 
-    std::snprintf(
-        text,
-        sizeof(text),
-        "NMEA vety %u | %u zn/s | checksum OK %u / chyba %u",
-        static_cast<unsigned>(state.sentencesProcessed),
-        static_cast<unsigned>(state.charsPerSecond),
-        static_cast<unsigned>(state.passedChecksums),
-        static_cast<unsigned>(state.failedChecksums));
-    lv_label_set_text(countersLabel, text);
+    if (state.lastNmeaSentence[0] == '$') {
+        lv_label_set_text(sentenceLabel, state.lastNmeaSentence);
+    } else {
+        lv_label_set_text(sentenceLabel, "Cekam na prvni NMEA vetu...");
+    }
 }
 
 }  // namespace GpsScreen

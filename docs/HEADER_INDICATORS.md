@@ -1,6 +1,6 @@
 # Main header indicators
 
-Firmware 1.0.5 keeps the compact `LoRa` header and displays six status groups before the Maidenhead locator.
+Firmware 1.1.0 keeps the compact `LoRa` header and displays seven status groups before the Maidenhead locator.
 
 ## GPS
 
@@ -28,6 +28,15 @@ The car uses the same APRS `/>` artwork as the station list.
 - green: tracker scheduling is active with a valid position
 
 A one-shot BOOT beacon does not permanently light the tracker icon when periodic tracking is disabled.
+
+## Stopar route logger
+
+The save icon shows the state of the independent GPS route logger.
+
+- grey: Stopar disabled
+- amber: enabled but waiting for SD/GPS, automatically paused or manually paused
+- green: route points are being recorded
+- red: a directory or SD write error was latched
 
 ## Digipeater
 

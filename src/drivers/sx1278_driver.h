@@ -39,11 +39,15 @@ public:
         std::uint32_t receivedPackets = 0;
         std::uint32_t transmittedPackets = 0;
         std::uint32_t receiveErrors = 0;
+        std::uint32_t transmitTimeouts = 0;
+        std::uint8_t consecutiveReceiveErrors = 0;
+        std::uint32_t lastActivityAtMs = 0;
     };
 
     Sx1278Driver();
 
     bool begin();
+    bool recover();
     void update(std::uint32_t now);
     bool startTransmit(const std::uint8_t* data, std::size_t length, std::uint32_t now);
     bool takePacket(Packet& packet);

@@ -7,8 +7,10 @@
 #include "drivers/button_driver.h"
 #include "services/geo_utils.h"
 #include "services/gps_service.h"
+#include "services/power_service.h"
 #include "services/radio_service.h"
 #include "services/settings_service.h"
+#include "services/trail_service.h"
 #include "services/tracker_service.h"
 #include "ui/screen_manager.h"
 
@@ -50,6 +52,7 @@ private:
         void* context);
     static bool trackerSettingsSaveThunk(
         bool enabled,
+        bool trailEnabled,
         TrackerPositionSource source,
         TrackerPositionFormat format,
         TrackerBeaconMode mode,
@@ -85,6 +88,7 @@ private:
         std::size_t errorTextCapacity);
     bool saveTrackerSettings(
         bool enabled,
+        bool trailEnabled,
         TrackerPositionSource source,
         TrackerPositionFormat format,
         TrackerBeaconMode mode,
@@ -98,8 +102,10 @@ private:
     Drivers::ButtonDriver buttons_;
     Services::SettingsService settings_;
     Services::GpsService gps_;
+    Services::PowerService power_;
     Services::RadioService radio_;
     Services::TrackerService tracker_;
+    Services::TrailService trail_;
     Services::PositionReference referencePosition_;
     Ui::ScreenManager screens_;
     std::uint32_t observedManualPacketsSent_ = 0;

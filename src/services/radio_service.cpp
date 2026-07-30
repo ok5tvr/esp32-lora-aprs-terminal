@@ -10,6 +10,13 @@
 #include "lora_profile.h"
 
 namespace Services {
+namespace {
+
+bool timeReached(std::uint32_t now, std::uint32_t target) {
+    return static_cast<std::int32_t>(now - target) >= 0;
+}
+
+}  // namespace
 
 bool RadioService::begin() {
     view_ = ViewState{};
@@ -17,8 +24,16 @@ bool RadioService::begin() {
     weatherStore_.clear();
     messageStore_.clear();
     digiIgate_.begin();
+    txQueue_.clear();
+    lastTxStartedAt_ = 0;
+    lastTxCompletedAt_ = 0;
+    observedCompletedTransmissions_ = 0;
+    wasTransmitting_ = false;
+    lastRecoveryAttemptAt_ = 0;
+    observedTransmitTimeouts_ = 0;
     const bool ready = driver_.begin();
     refreshDriverStatus();
+    refreshQueueStatus();
     return ready;
 }
 
@@ -26,10 +41,11 @@ void RadioService::update(
     std::uint32_t now,
     const SettingsService::ViewState& settings) {
 
-    // Called on every main-loop pass. RX, station/weather history, APRS
-    // messaging, DIGI and iGate therefore continue regardless of screen.
+    // Keep network, RF reception and protocol parsing ahead of queued TX work.
     digiIgate_.update(now, settings);
+    serviceRecovery(now);
     driver_.update(now);
+    observeDriverEvents(now);
 
     Drivers::Sx1278Driver::Packet packet;
     if (driver_.takePacket(packet)) {
@@ -42,8 +58,8 @@ void RadioService::update(
         view_.lastRssiDbm = packet.rssiDbm;
         view_.lastSnrDb = packet.snrDb;
         view_.lastFrequencyErrorHz = packet.frequencyErrorHz;
+        view_.lastRxAtMs = now;
 
-        // Binary-safe protocol input is required for Mic-E.
         std::uint8_t rawTnc2[LoRaProfile::MAX_PACKET_LENGTH + 1] = {};
         std::size_t rawTnc2Length = 0;
         bool rawHadOeHeader = false;
@@ -56,7 +72,13 @@ void RadioService::update(
                 rawHadOeHeader)) {
             Aprs::ParsedFrame parsed;
             if (Aprs::parseTnc2(rawTnc2, rawTnc2Length, parsed)) {
-                stationStore_.ingest(parsed, packet.rssiDbm, packet.snrDb, now);
+                ++view_.validAprsPackets;
+                stationStore_.ingest(
+                    parsed,
+                    packet.rssiDbm,
+                    packet.snrDb,
+                    now,
+                    view_.lastPacketText);
                 weatherStore_.ingest(parsed, packet.rssiDbm, packet.snrDb, now);
                 if (parsed.hasPosition) {
                     LOG_I(
@@ -69,6 +91,8 @@ void RadioService::update(
                         parsed.latitude,
                         parsed.longitude);
                 }
+            } else {
+                ++view_.decodeErrors;
             }
 
             digiIgate_.ingestRfFrame(rawTnc2, rawTnc2Length, now);
@@ -85,6 +109,7 @@ void RadioService::update(
                     parsedMessage.text);
             }
         } else {
+            ++view_.decodeErrors;
             LOG_D("APRS", "RX payload decode failed");
         }
 
@@ -93,9 +118,13 @@ void RadioService::update(
 
     messageStore_.update(now);
     refreshDriverStatus();
-    serviceMessageTransmit(now, settings.callsign);
+    serviceMessageQueue(now, settings.callsign);
+    serviceDigiQueue(now);
+    serviceTxQueue(now);
     refreshDriverStatus();
-    serviceDigiTransmit(now);
+    serviceRecovery(now);
+    refreshDriverStatus();
+    refreshQueueStatus();
 }
 
 bool RadioService::sendTestPacket(const char* callsign, std::uint32_t now) {
@@ -107,23 +136,44 @@ bool RadioService::sendTestPacket(const char* callsign, std::uint32_t now) {
         callsign != nullptr && callsign[0] != '\0' ? callsign : AppConfig::DEFAULT_CALLSIGN,
         AppConfig::APRS_DESTINATION,
         AppConfig::FIRMWARE_VERSION);
-    return sendTnc2(frame, now);
-}
-
-bool RadioService::sendTnc2(const char* frame, std::uint32_t now) {
-    if (frame == nullptr) {
-        return false;
-    }
-    return sendTnc2Bytes(
+    return enqueueTnc2Bytes(
         reinterpret_cast<const std::uint8_t*>(frame),
         std::strlen(frame),
+        TxQueue::Source::Test,
+        TxQueue::Priority::Test,
         now);
 }
 
-bool RadioService::sendTnc2Bytes(
+bool RadioService::queueTrackerPacket(
+    const char* frame,
+    bool manual,
+    std::uint32_t now) {
+
+    if (frame == nullptr) {
+        return false;
+    }
+    return enqueueTnc2Bytes(
+        reinterpret_cast<const std::uint8_t*>(frame),
+        std::strlen(frame),
+        manual ? TxQueue::Source::ManualBeacon : TxQueue::Source::Tracker,
+        manual ? TxQueue::Priority::ManualBeacon : TxQueue::Priority::Tracker,
+        now,
+        !manual);
+}
+
+bool RadioService::sendTnc2(const char* frame, std::uint32_t now) {
+    return queueTrackerPacket(frame, false, now);
+}
+
+bool RadioService::enqueueTnc2Bytes(
     const std::uint8_t* frame,
     std::size_t frameLength,
-    std::uint32_t now) {
+    TxQueue::Source source,
+    TxQueue::Priority priority,
+    std::uint32_t now,
+    bool replaceSameSource,
+    const char* tagPeer,
+    const char* tagId) {
 
     if (frame == nullptr || frameLength == 0) {
         return false;
@@ -141,12 +191,18 @@ bool RadioService::sendTnc2Bytes(
         std::memcpy(packet, Aprs::OE_LORA_HEADER, headerLength);
     }
     std::memcpy(packet + headerLength, frame, frameLength);
-    const bool started = driver_.startTransmit(
+
+    const bool queued = txQueue_.enqueue(
         packet,
         headerLength + frameLength,
-        now);
-    if (started) {
-        char printable[220] = {};
+        source,
+        priority,
+        now,
+        replaceSameSource,
+        tagPeer,
+        tagId);
+    if (queued) {
+        char printable[180] = {};
         const std::size_t copyLength = frameLength < sizeof(printable) - 1
             ? frameLength
             : sizeof(printable) - 1;
@@ -156,10 +212,12 @@ bool RadioService::sendTnc2Bytes(
                 ? static_cast<char>(value)
                 : '.';
         }
-        LOG_I("APRS", "TX queued: %s", printable);
+        LOG_I("TXQ", "%s queued: %s", TxQueue::sourceName(source), printable);
+    } else {
+        LOG_E("TXQ", "%s queue full or invalid frame", TxQueue::sourceName(source));
     }
-    refreshDriverStatus();
-    return started;
+    refreshQueueStatus();
+    return queued;
 }
 
 bool RadioService::queueMessage(
@@ -206,14 +264,38 @@ void RadioService::refreshDriverStatus() {
     view_.receivedPackets = status.receivedPackets;
     view_.transmittedPackets = status.transmittedPackets;
     view_.receiveErrors = status.receiveErrors;
+    view_.transmitTimeouts = status.transmitTimeouts;
+    view_.consecutiveReceiveErrors = status.consecutiveReceiveErrors;
 }
 
-void RadioService::serviceMessageTransmit(
+
+void RadioService::observeDriverEvents(std::uint32_t now) {
+    const Drivers::Sx1278Driver::Status& status = driver_.status();
+    const bool transmitting = status.mode == Drivers::Sx1278Driver::Mode::Transmitting;
+    const std::uint32_t completed = status.transmittedPackets;
+    if ((wasTransmitting_ && !transmitting) ||
+        completed != observedCompletedTransmissions_) {
+        lastTxCompletedAt_ = now;
+    }
+    observedCompletedTransmissions_ = completed;
+    wasTransmitting_ = transmitting;
+}
+
+void RadioService::refreshQueueStatus() {
+    const TxQueue::Stats& stats = txQueue_.stats();
+    view_.txQueueDepth = stats.depth;
+    view_.txQueueMaximumDepth = stats.maximumDepth;
+    view_.txQueueEnqueued = stats.enqueued;
+    view_.txQueueReplaced = stats.replaced;
+    view_.txQueueDrops = stats.drops;
+}
+
+void RadioService::serviceMessageQueue(
     std::uint32_t now,
     const char* ownCallsign) {
 
-    if (!view_.initialized || view_.transmitting || ownCallsign == nullptr ||
-        ownCallsign[0] == '\0') {
+    if (!view_.initialized || ownCallsign == nullptr || ownCallsign[0] == '\0' ||
+        txQueue_.contains(TxQueue::Source::Acknowledgement)) {
         return;
     }
 
@@ -229,27 +311,130 @@ void RadioService::serviceMessageTransmit(
         return;
     }
 
-    if (sendTnc2(frame, now)) {
-        messageStore_.markTransmissionStarted(token, now);
+    const bool acknowledgement = token.kind == MessageStore::TxToken::Kind::Acknowledgement;
+    if (!acknowledgement && txQueue_.contains(TxQueue::Source::Message)) {
+        return;
     }
+    enqueueTnc2Bytes(
+        reinterpret_cast<const std::uint8_t*>(frame),
+        std::strlen(frame),
+        acknowledgement ? TxQueue::Source::Acknowledgement : TxQueue::Source::Message,
+        acknowledgement ? TxQueue::Priority::Acknowledgement : TxQueue::Priority::Message,
+        now,
+        false,
+        token.peer,
+        token.messageId);
 }
 
-void RadioService::serviceDigiTransmit(std::uint32_t now) {
-    if (!view_.initialized || view_.transmitting) {
+void RadioService::serviceDigiQueue(std::uint32_t now) {
+    if (!view_.initialized ||
+        txQueue_.contains(TxQueue::Source::Digipeater)) {
         return;
     }
 
     std::uint8_t frame[LoRaProfile::MAX_PACKET_LENGTH] = {};
     std::size_t frameLength = 0;
-    if (!digiIgate_.takeDigiFrame(
-            now,
-            frame,
-            sizeof(frame),
-            frameLength)) {
+    if (!digiIgate_.takeDigiFrame(now, frame, sizeof(frame), frameLength)) {
         return;
     }
-    const bool started = sendTnc2Bytes(frame, frameLength, now);
-    digiIgate_.markDigiTransmitResult(started);
+    const bool queued = enqueueTnc2Bytes(
+        frame,
+        frameLength,
+        TxQueue::Source::Digipeater,
+        TxQueue::Priority::Digipeater,
+        now);
+    if (!queued) {
+        digiIgate_.markDigiTransmitResult(false);
+    }
+}
+
+void RadioService::serviceTxQueue(std::uint32_t now) {
+    if (!view_.initialized || view_.transmitting ||
+        (lastTxCompletedAt_ != 0 && now - lastTxCompletedAt_ < AppConfig::RADIO_TX_MIN_GAP_MS)) {
+        return;
+    }
+
+    TxQueue::Item candidate;
+    std::size_t index = 0;
+    if (!txQueue_.peek(candidate, index)) {
+        return;
+    }
+
+    if (!driver_.startTransmit(candidate.data, candidate.length, now)) {
+        refreshDriverStatus();
+        return;
+    }
+
+    TxQueue::Item started;
+    if (txQueue_.pop(index, started)) {
+        lastTxStartedAt_ = now;
+        wasTransmitting_ = true;
+        view_.lastTxAtMs = now;
+        std::snprintf(
+            view_.lastTxSource,
+            sizeof(view_.lastTxSource),
+            "%s",
+            TxQueue::sourceName(started.source));
+        onTransmissionStarted(started, now);
+    }
+}
+
+void RadioService::onTransmissionStarted(
+    const TxQueue::Item& item,
+    std::uint32_t now) {
+
+    if (item.source == TxQueue::Source::Acknowledgement ||
+        item.source == TxQueue::Source::Message) {
+        MessageStore::TxToken token;
+        token.kind = item.source == TxQueue::Source::Acknowledgement
+            ? MessageStore::TxToken::Kind::Acknowledgement
+            : MessageStore::TxToken::Kind::OutgoingMessage;
+        std::snprintf(token.peer, sizeof(token.peer), "%s", item.tagPeer);
+        std::snprintf(token.messageId, sizeof(token.messageId), "%s", item.tagId);
+        messageStore_.markTransmissionStarted(token, now);
+    } else if (item.source == TxQueue::Source::Digipeater) {
+        digiIgate_.markDigiTransmitResult(true);
+    }
+
+    LOG_I("TXQ", "%s started, %u bytes", TxQueue::sourceName(item.source),
+          static_cast<unsigned>(item.length));
+}
+
+void RadioService::serviceRecovery(std::uint32_t now) {
+    const Drivers::Sx1278Driver::Status& status = driver_.status();
+    const bool timeoutObserved = status.transmitTimeouts != observedTransmitTimeouts_;
+    if (timeoutObserved) {
+        observedTransmitTimeouts_ = status.transmitTimeouts;
+    }
+
+    const char* reason = nullptr;
+    if (!status.initialized) {
+        reason = "radio offline";
+    } else if (status.mode == Drivers::Sx1278Driver::Mode::Error) {
+        reason = "stav ERROR";
+    } else if (status.consecutiveReceiveErrors >= AppConfig::RADIO_RECOVERY_RX_ERROR_THRESHOLD) {
+        reason = "opakovana RX chyba";
+    } else if (timeoutObserved) {
+        reason = "TX timeout";
+    }
+
+    if (reason == nullptr ||
+        (lastRecoveryAttemptAt_ != 0 &&
+         !timeReached(now, lastRecoveryAttemptAt_ + AppConfig::RADIO_RECOVERY_RETRY_MS))) {
+        return;
+    }
+
+    lastRecoveryAttemptAt_ = now;
+    ++view_.recoveryAttempts;
+    LOG_E("RADIO", "Automatic recovery: %s", reason);
+    const bool recovered = driver_.recover();
+    if (recovered) {
+        ++view_.successfulRecoveries;
+        std::snprintf(view_.lastRecoveryText, sizeof(view_.lastRecoveryText), "OK: %s", reason);
+    } else {
+        ++view_.recoveryFailures;
+        std::snprintf(view_.lastRecoveryText, sizeof(view_.lastRecoveryText), "SELHANI: %s", reason);
+    }
 }
 
 }  // namespace Services

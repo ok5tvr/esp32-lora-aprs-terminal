@@ -14,6 +14,7 @@ namespace {
 
 enum class Field : std::uint8_t {
     Enabled,
+    TrailEnabled,
     Source,
     Format,
     Mode,
@@ -27,11 +28,12 @@ lv_obj_t* gpsLabel = nullptr;
 lv_obj_t* statusLabel = nullptr;
 lv_obj_t* messageLabel = nullptr;
 lv_obj_t* symbolDropdown = nullptr;
-lv_obj_t* valueLabels[5] = {};
+lv_obj_t* valueLabels[6] = {};
 
 App::TrackerSettingsSaveHandler saveHandler = nullptr;
 void* saveContext = nullptr;
 bool draftEnabled = false;
+bool draftTrailEnabled = false;
 App::TrackerPositionSource draftSource = App::TrackerPositionSource::Gps;
 App::TrackerPositionFormat draftFormat = App::TrackerPositionFormat::Uncompressed;
 App::TrackerBeaconMode draftMode = App::TrackerBeaconMode::FixedInterval;
@@ -56,16 +58,18 @@ void refreshDraftLabels() {
         return;
     }
     lv_label_set_text(valueLabels[0], draftEnabled ? "ZAPNUT" : "VYPNUT");
-    lv_label_set_text(valueLabels[1], sourceText(draftSource));
-    lv_label_set_text(valueLabels[2], formatText(draftFormat));
-    lv_label_set_text(valueLabels[3], modeText(draftMode));
+    lv_label_set_text(valueLabels[1], draftTrailEnabled ? "ZAPNUT" : "VYPNUT");
+    lv_label_set_text(valueLabels[2], sourceText(draftSource));
+    lv_label_set_text(valueLabels[3], formatText(draftFormat));
+    lv_label_set_text(valueLabels[4], modeText(draftMode));
     char interval[32];
     std::snprintf(interval, sizeof(interval), "%u s", static_cast<unsigned>(draftInterval));
-    lv_label_set_text(valueLabels[4], interval);
+    lv_label_set_text(valueLabels[5], interval);
 }
 
 void copyFromSettings(const Services::SettingsService::ViewState& settings) {
     draftEnabled = settings.trackerEnabled;
+    draftTrailEnabled = settings.trailEnabled;
     draftSource = settings.trackerSource;
     draftFormat = settings.trackerFormat;
     draftMode = settings.trackerMode;
@@ -104,6 +108,9 @@ void fieldClicked(lv_event_t* event) {
     switch (field) {
         case Field::Enabled:
             draftEnabled = !draftEnabled;
+            break;
+        case Field::TrailEnabled:
+            draftTrailEnabled = !draftTrailEnabled;
             break;
         case Field::Source:
             draftSource = draftSource == App::TrackerPositionSource::Gps
@@ -278,11 +285,12 @@ void create(
     lv_obj_set_scrollbar_mode(content, LV_SCROLLBAR_MODE_AUTO);
 
     createFieldRow("Tracker", "Zmena se projevi po ulozeni", Field::Enabled, 0);
-    createFieldRow("Zdroj pozice", "GPS nebo vychozi pozice", Field::Source, 1);
-    createFieldRow("Format", "Normalni nebo Base-91", Field::Format, 2);
+    createFieldRow("Stopar", "Automaticky zaznam GPS trasy na SD", Field::TrailEnabled, 1);
+    createFieldRow("Zdroj pozice", "GPS nebo vychozi pozice", Field::Source, 2);
+    createFieldRow("Format", "Normalni nebo Base-91", Field::Format, 3);
     createSymbolRow();
-    createFieldRow("Planovani", "Pevny interval / SmartBeacon", Field::Mode, 3);
-    createFieldRow("Interval", "Pouziva se v rezimu pevny cas", Field::Interval, 4);
+    createFieldRow("Planovani", "Pevny interval / SmartBeacon", Field::Mode, 4);
+    createFieldRow("Interval", "Pouziva se v rezimu pevny cas", Field::Interval, 5);
 
     lv_obj_t* saveButton = lv_btn_create(content);
     lv_obj_set_size(saveButton, 438, 40);
@@ -296,7 +304,7 @@ void create(
     messageLabel = lv_label_create(content);
     lv_obj_set_width(messageLabel, 430);
     lv_label_set_long_mode(messageLabel, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(messageLabel, "BOOT tlacitko odesle jednorazovy pozicni beacon.");
+    lv_label_set_text(messageLabel, "Stopare lze pozastavit na jeho samostatne strance.");
     lv_obj_set_style_text_font(messageLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(messageLabel, lv_color_hex(0x92A7C7), 0);
 
@@ -349,6 +357,7 @@ void save() {
     char error[128] = {};
     const bool result = saveHandler(
         draftEnabled,
+        draftTrailEnabled,
         draftSource,
         draftFormat,
         draftMode,

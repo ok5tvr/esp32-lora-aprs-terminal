@@ -14,16 +14,19 @@ namespace {
 lv_obj_t* listObject = nullptr;
 lv_obj_t* countLabel = nullptr;
 lv_obj_t* referenceLabel = nullptr;
+lv_obj_t* renderedRows[Services::StationStore::MAX_STATIONS] = {};
 std::uint32_t renderedRevision = 0xFFFFFFFFU;
 std::uint32_t renderedReferenceRevision = 0xFFFFFFFFU;
+std::size_t selected = 0;
+std::size_t currentCount = 0;
 
-void styleRow(lv_obj_t* row) {
+void styleRow(lv_obj_t* row, bool selectedRow) {
     lv_obj_set_width(row, 438);
     lv_obj_set_height(row, 62);
-    lv_obj_set_style_bg_color(row, lv_color_hex(0x17243A), 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(selectedRow ? 0x203A58 : 0x17243A), 0);
     lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(0x31425F), 0);
-    lv_obj_set_style_border_width(row, 1, 0);
+    lv_obj_set_style_border_color(row, lv_color_hex(selectedRow ? 0x56C7FF : 0x31425F), 0);
+    lv_obj_set_style_border_width(row, selectedRow ? 2 : 1, 0);
     lv_obj_set_style_radius(row, 10, 0);
     lv_obj_set_style_pad_left(row, 12, 0);
     lv_obj_set_style_pad_right(row, 12, 0);
@@ -32,12 +35,13 @@ void styleRow(lv_obj_t* row) {
     lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 }
 
-void createStationRow(
+lv_obj_t* createStationRow(
     const Services::StationStore::Station& station,
-    const Services::PositionReference& reference) {
+    const Services::PositionReference& reference,
+    bool selectedRow) {
 
     lv_obj_t* row = lv_obj_create(listObject);
-    styleRow(row);
+    styleRow(row, selectedRow);
 
     char titleText[72];
     if (station.type == Aprs::EntityType::Object) {
@@ -57,10 +61,7 @@ void createStationRow(
     lv_obj_align(callLabel, LV_ALIGN_TOP_LEFT, 0, 0);
 
     lv_obj_t* symbolIcon = AprsIcons::create(
-        row,
-        station.symbol[0],
-        station.symbol[1],
-        station.hasPosition);
+        row, station.symbol[0], station.symbol[1], station.hasPosition);
     lv_obj_align(symbolIcon, LV_ALIGN_TOP_RIGHT, 0, -2);
 
     lv_obj_t* positionLabel = lv_label_create(row);
@@ -68,32 +69,20 @@ void createStationRow(
     if (station.hasPosition) {
         const Services::DistanceBearing relative = reference.valid
             ? Services::calculateDistanceBearing(
-                reference.latitude,
-                reference.longitude,
-                station.latitude,
-                station.longitude)
+                reference.latitude, reference.longitude, station.latitude, station.longitude)
             : Services::DistanceBearing{};
         if (relative.valid) {
             std::snprintf(
                 positionText,
                 sizeof(positionText),
-                "%.5f%c %.5f%c | %.1f km %03.0f deg %s",
-                station.latitude < 0.0 ? -station.latitude : station.latitude,
-                station.latitude < 0.0 ? 'S' : 'N',
-                station.longitude < 0.0 ? -station.longitude : station.longitude,
-                station.longitude < 0.0 ? 'W' : 'E',
+                "%.5f, %.5f | %.1f km %03.0f deg %s",
+                station.latitude,
+                station.longitude,
                 relative.distanceKm,
                 relative.bearingDegrees,
                 Services::cardinalDirection(relative.bearingDegrees));
         } else {
-            std::snprintf(
-                positionText,
-                sizeof(positionText),
-                "%.5f%c %.5f%c | vzdalenost --",
-                station.latitude < 0.0 ? -station.latitude : station.latitude,
-                station.latitude < 0.0 ? 'S' : 'N',
-                station.longitude < 0.0 ? -station.longitude : station.longitude,
-                station.longitude < 0.0 ? 'W' : 'E');
+            std::snprintf(positionText, sizeof(positionText), "%.5f, %.5f | vzdalenost --", station.latitude, station.longitude);
         }
     } else {
         std::snprintf(positionText, sizeof(positionText), "Poloha v paketu neni");
@@ -104,6 +93,7 @@ void createStationRow(
     lv_obj_set_style_text_font(positionLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(positionLabel, lv_color_hex(0xBDCAE0), 0);
     lv_obj_align(positionLabel, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    return row;
 }
 
 }  // namespace
@@ -140,6 +130,7 @@ void create() {
 
     renderedRevision = 0xFFFFFFFFU;
     renderedReferenceRevision = 0xFFFFFFFFU;
+    currentCount = 0;
 }
 
 void update(
@@ -149,14 +140,22 @@ void update(
     if (listObject == nullptr || countLabel == nullptr || referenceLabel == nullptr) {
         return;
     }
+    if (selected >= state.count && state.count > 0) {
+        selected = state.count - 1;
+    }
     if (renderedRevision == state.revision &&
-        renderedReferenceRevision == reference.revision) {
+        renderedReferenceRevision == reference.revision &&
+        currentCount == state.count) {
         return;
     }
 
     renderedRevision = state.revision;
     renderedReferenceRevision = reference.revision;
+    currentCount = state.count;
     lv_obj_clean(listObject);
+    for (lv_obj_t*& row : renderedRows) {
+        row = nullptr;
+    }
     lv_label_set_text(referenceLabel, reference.valid ? (reference.fromGps ? "Ref: GPS" : "Ref: DEF") : "Ref: --");
 
     char countText[16];
@@ -176,16 +175,27 @@ void update(
     }
 
     for (std::size_t index = 0; index < state.count; ++index) {
-        createStationRow(state.stations[index], reference);
+        renderedRows[index] = createStationRow(state.stations[index], reference, index == selected);
     }
-    lv_obj_scroll_to_y(listObject, 0, LV_ANIM_OFF);
+    if (renderedRows[selected] != nullptr) {
+        lv_obj_scroll_to_view(renderedRows[selected], LV_ANIM_OFF);
+    }
 }
 
-void scroll(int direction) {
-    if (listObject == nullptr || direction == 0) {
+void moveSelection(int direction) {
+    if (direction == 0 || currentCount == 0) {
         return;
     }
-    lv_obj_scroll_by(listObject, 0, direction > 0 ? -67 : 67, LV_ANIM_ON);
+    if (direction < 0) {
+        selected = selected == 0 ? currentCount - 1 : selected - 1;
+    } else {
+        selected = (selected + 1) % currentCount;
+    }
+    renderedRevision = 0xFFFFFFFFU;
+}
+
+std::size_t selectedIndex() {
+    return selected;
 }
 
 }  // namespace StationsScreen
