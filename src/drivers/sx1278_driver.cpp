@@ -1,6 +1,7 @@
 #include "drivers/sx1278_driver.h"
 
 #include <Arduino.h>
+#include <cmath>
 #include <cstring>
 
 #include "app_config.h"
@@ -170,6 +171,22 @@ bool Sx1278Driver::takePacket(Packet& packet) {
     }
     packet = pendingPacket_;
     packetAvailable_ = false;
+    return true;
+}
+
+bool Sx1278Driver::readCurrentRssi(float& rssiDbm) {
+    if (!status_.initialized || status_.mode != Mode::Receiving) {
+        return false;
+    }
+
+    // In LoRa mode RadioLib reads RegRssiValue when packet=false. The call
+    // only performs a short SPI register read and leaves continuous RX active.
+    const float sample = radio_.getRSSI(false, true);
+    if (!std::isfinite(sample) || sample < -170.0F || sample > 0.0F) {
+        return false;
+    }
+
+    rssiDbm = sample;
     return true;
 }
 

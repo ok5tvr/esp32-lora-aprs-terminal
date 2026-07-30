@@ -101,6 +101,9 @@ bool AppController::begin() {
 
     tracker_.begin();
     trail_.begin();
+    if (!map_.begin()) {
+        LOG_E("APP", "Offline map framebuffer unavailable");
+    }
     updateReferencePosition();
     screens_.begin(
         commandThunk,
@@ -140,6 +143,10 @@ void AppController::update() {
     trail_.update(now, settings_.viewState().trailEnabled, gps_.viewState());
     power_.update(now);
     updateReferencePosition();
+    map_.update(
+        now,
+        screens_.currentScreen() == App::ScreenId::Map,
+        referencePosition_);
 
     screens_.update(
         now,
@@ -153,6 +160,7 @@ void AppController::update() {
         power_.viewState(),
         radio_.digiIgateViewState(),
         referencePosition_,
+        map_.viewState(),
         settings_.viewState());
 
     const Services::TrackerService::ViewState& trackerState = tracker_.viewState();
@@ -390,6 +398,12 @@ void AppController::handleCommand(Command command) {
             message,
             sizeof(message));
         screens_.setMessage(message);
+    } else if (command == Command::MapZoomIn) {
+        map_.zoomIn();
+    } else if (command == Command::MapZoomOut) {
+        map_.zoomOut();
+    } else if (command == Command::MapRecenter) {
+        map_.recenter();
     }
 }
 

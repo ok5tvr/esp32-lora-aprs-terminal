@@ -111,3 +111,17 @@ counters are retained. This recovery does not reset the ESP32 or other services.
 keeps a fixed 20-entry history, ACK queue and retransmission schedule. ACK and
 outgoing-message frames enter the central queue with the two highest priorities,
 so reception and acknowledgement handling remain background tasks.
+
+## Offline map layer (2.0.0)
+
+`MapService` owns a 480 x 202 RGB565 framebuffer allocated preferentially in
+PSRAM. It converts the current GPS/default reference to Web Mercator world
+pixels, creates up to nine clipped XYZ tile jobs and reads one eight-row strip
+per main-loop pass from `/MAP/<z>/<x>/<y>.rgb`. The service is active only while
+`ScreenId::Map` is displayed.
+
+`MapScreen` attaches the service buffer to an LVGL canvas. APRS symbols, the
+current position and the recent Stopar polyline are separate LVGL overlay
+objects, so a new station does not require the map tiles to be read again.
+`map_projection.*` contains hardware-independent coordinate conversion and is
+covered by native host tests.

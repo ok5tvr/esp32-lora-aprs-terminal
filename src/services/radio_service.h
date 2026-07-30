@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "app_config.h"
 #include "drivers/sx1278_driver.h"
 #include "services/digi_igate_service.h"
 #include "services/message_store.h"
@@ -40,6 +41,24 @@ public:
         float lastRssiDbm = 0.0F;
         float lastSnrDb = 0.0F;
         float lastFrequencyErrorHz = 0.0F;
+
+        // Periodic background/channel RSSI monitoring. Each stored point is
+        // an average of a short burst; peak history records the strongest
+        // instantaneous value observed in the same burst.
+        bool noiseMeasurementActive = false;
+        std::uint8_t noiseBurstProgress = 0;
+        std::uint8_t noiseHistoryCount = 0;
+        std::uint32_t noiseHistoryRevision = 0;
+        std::uint32_t noiseLastMeasurementAtMs = 0;
+        std::uint32_t noiseNextMeasurementAtMs = 0;
+        float noiseLatestAverageDbm = 0.0F;
+        float noiseLatestPeakDbm = 0.0F;
+        float noiseHistoryAverageDbm = 0.0F;
+        float noiseHistoryMinDbm = 0.0F;
+        float noiseHistoryMaxDbm = 0.0F;
+        float noiseHistoryDbm[AppConfig::RADIO_NOISE_HISTORY_LENGTH] = {};
+        float noisePeakHistoryDbm[AppConfig::RADIO_NOISE_HISTORY_LENGTH] = {};
+
         char lastTxSource[16] = "--";
         char lastRecoveryText[64] = "Zatim nebyla potreba";
         char lastPacketText[256] = "Cekam na prvni paket...";
@@ -72,6 +91,9 @@ private:
     void serviceDigiQueue(std::uint32_t now);
     void serviceTxQueue(std::uint32_t now);
     void serviceRecovery(std::uint32_t now);
+    void serviceNoiseMonitor(std::uint32_t now);
+    void appendNoiseMeasurement(float averageDbm, float peakDbm, std::uint32_t now);
+    void cancelNoiseBurst(std::uint32_t now);
     bool enqueueTnc2Bytes(
         const std::uint8_t* frame,
         std::size_t frameLength,
@@ -96,6 +118,12 @@ private:
     bool wasTransmitting_ = false;
     std::uint32_t lastRecoveryAttemptAt_ = 0;
     std::uint32_t observedTransmitTimeouts_ = 0;
+    std::uint32_t nextNoiseMeasurementAt_ = 0;
+    std::uint32_t lastNoiseBurstSampleAt_ = 0;
+    float noiseBurstAccumulator_ = 0.0F;
+    float noiseBurstPeakDbm_ = -170.0F;
+    std::uint8_t noiseBurstSamples_ = 0;
+    bool noiseBurstActive_ = false;
 };
 
 }  // namespace Services

@@ -59,6 +59,11 @@ bool StationStore::ingest(
     updated.callsign[sizeof(updated.callsign) - 1] = '\0';
     std::strncpy(updated.entityName, frame.entityName, sizeof(updated.entityName) - 1);
     updated.entityName[sizeof(updated.entityName) - 1] = '\0';
+    updated.positionFormat = frame.positionFormat;
+    updated.emergency = frame.emergency;
+    updated.telemetry = frame.telemetry;
+    updated.phg = frame.phg;
+    updated.frequency = frame.frequency;
     updated.lastRssiDbm = rssiDbm;
     updated.lastSnrDb = snrDb;
     updated.lastHeardMs = now;

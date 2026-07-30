@@ -1,6 +1,7 @@
 #include "ui/screens/station_detail_screen.h"
 
 #include <cstdio>
+#include <cstring>
 #include <lvgl.h>
 
 #include "services/geo_utils.h"
@@ -27,6 +28,16 @@ const char* entityTypeName(Aprs::EntityType type) {
         case Aprs::EntityType::Object: return "Objekt";
         case Aprs::EntityType::Item: return "Polozka";
         default: return "Stanice";
+    }
+}
+
+
+const char* positionFormatName(Aprs::PositionFormat format) {
+    switch (format) {
+        case Aprs::PositionFormat::Uncompressed: return "normalni";
+        case Aprs::PositionFormat::Compressed: return "komprimovana";
+        case Aprs::PositionFormat::MicE: return "Mic-E";
+        default: return "bez polohy";
     }
 }
 
@@ -116,6 +127,7 @@ void update(
 
     lv_label_set_text(titleLabel,
         station.type == Aprs::EntityType::Station ? station.callsign : station.entityName);
+    lv_obj_set_style_text_color(titleLabel, lv_color_hex(station.emergency ? 0xFF4242 : 0xF4F7FF), 0);
 
     if (iconObject == nullptr || renderedSymbolTable != station.symbol[0] ||
         renderedSymbolCode != station.symbol[1] || renderedHasPosition != station.hasPosition) {
@@ -162,12 +174,25 @@ void update(
         lv_label_set_text(positionLabel, "Poloha nebyla v poslednim paketu uvedena.\nNavigace neni dostupna.");
     }
 
-    lv_label_set_text_fmt(
-        signalLabel,
-        "Symbol %c%c | RSSI %.1f dBm | SNR %.1f dB",
-        station.symbol[0], station.symbol[1],
-        static_cast<double>(station.lastRssiDbm),
-        static_cast<double>(station.lastSnrDb));
+    char protocol[220] = {};
+    std::snprintf(protocol, sizeof(protocol), "Format %s | symbol %c%c | RSSI %.1f | SNR %.1f",
+        positionFormatName(station.positionFormat), station.symbol[0], station.symbol[1],
+        static_cast<double>(station.lastRssiDbm), static_cast<double>(station.lastSnrDb));
+    if (station.emergency) std::strncat(protocol, " | EMERGENCY", sizeof(protocol)-std::strlen(protocol)-1);
+    if (station.frequency.valid) {
+        char part[64]; std::snprintf(part,sizeof(part)," | %.3f MHz",static_cast<double>(station.frequency.frequencyMhz));
+        std::strncat(protocol,part,sizeof(protocol)-std::strlen(protocol)-1);
+    }
+    if (station.phg.valid) {
+        char part[72]; std::snprintf(part,sizeof(part)," | PHG %uW/%luft/%udB/%u",
+            station.phg.powerWatts,(unsigned long)station.phg.heightFeet,station.phg.gainDb,station.phg.directivityDegrees);
+        std::strncat(protocol,part,sizeof(protocol)-std::strlen(protocol)-1);
+    }
+    if (station.telemetry.valid) {
+        char part[48]; std::snprintf(part,sizeof(part)," | T#%03u",station.telemetry.sequence);
+        std::strncat(protocol,part,sizeof(protocol)-std::strlen(protocol)-1);
+    }
+    lv_label_set_text(signalLabel, protocol);
     lv_label_set_text(packetLabel,
         station.lastFrame[0] != '\0' ? station.lastFrame : "Posledni TNC2 ramec neni ulozen.");
     lv_label_set_text(actionLabel,

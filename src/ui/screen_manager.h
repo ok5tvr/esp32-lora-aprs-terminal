@@ -6,6 +6,7 @@
 #include "app/app_types.h"
 #include "services/geo_utils.h"
 #include "services/gps_service.h"
+#include "services/map_service.h"
 #include "services/power_service.h"
 #include "services/radio_service.h"
 #include "services/settings_service.h"
@@ -39,8 +40,10 @@ public:
         const Services::PowerService::ViewState& powerState,
         const Services::DigiIgateService::ViewState& digiIgateState,
         const Services::PositionReference& reference,
+        const Services::MapService::ViewState& mapState,
         const Services::SettingsService::ViewState& settingsState);
     void setMessage(const char* text);
+    App::ScreenId currentScreen() const;
 
 private:
     static void navigationThunk(App::NavigationAction action, void* context);
@@ -64,15 +67,20 @@ private:
     App::TrackerSettingsSaveHandler trackerSaveHandler_ = nullptr;
     void* trackerSaveContext_ = nullptr;
     Services::SettingsService::ViewState settingsState_;
+    const Services::RadioService::ViewState* radioState_ = nullptr;
     Services::GpsService::ViewState gpsState_;
     const Services::StationStore::ViewState* stationState_ = nullptr;
+    const Services::WeatherStore::ViewState* weatherState_ = nullptr;
     Services::StationStore::Station selectedStation_;
     bool selectedStationValid_ = false;
+    Services::WeatherStore::WeatherStation selectedWeather_;
+    bool selectedWeatherValid_ = false;
     Services::TrackerService::ViewState trackerState_;
     Services::TrailService::ViewState trailState_;
     Services::PowerService::ViewState powerState_;
     Services::DigiIgateService::ViewState digiIgateState_;
     Services::PositionReference referenceState_;
+    const Services::MapService::ViewState* mapState_ = nullptr;
     App::ScreenId currentScreen_ = App::ScreenId::Splash;
     std::size_t selectedMenuItem_ = 0;
     std::uint32_t lastRefreshAt_ = 0;

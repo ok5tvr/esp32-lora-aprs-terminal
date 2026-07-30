@@ -326,7 +326,7 @@ void TrailService::closeSession(
     const GpsService::ViewState* gps) {
 
     if (!view_.fileOpen) {
-        resetSessionRuntime();
+        resetSessionRuntime(false);
         return;
     }
 
@@ -344,7 +344,7 @@ void TrailService::closeSession(
     view_.activeFile[0] = '\0';
     refreshLogs();
     LOG_I("TRAIL", "Recording stopped");
-    resetSessionRuntime();
+    resetSessionRuntime(false);
 }
 
 void TrailService::setState(State state, const char* text) {
@@ -363,7 +363,7 @@ void TrailService::setError(const char* text) {
     LOG_E("TRAIL", "%s", view_.statusText);
 }
 
-void TrailService::resetSessionRuntime() {
+void TrailService::resetSessionRuntime(bool clearRecentTrail) {
     queueHead_ = 0;
     queueTail_ = 0;
     queueCount_ = 0;
@@ -379,6 +379,10 @@ void TrailService::resetSessionRuntime() {
     view_.elapsedSeconds = 0;
     view_.distanceKm = 0.0;
     view_.autoPaused = false;
+    if (clearRecentTrail) {
+        view_.recentPointCount = 0;
+        ++view_.recentPointRevision;
+    }
 }
 
 bool TrailService::queueLine(const char* line) {
@@ -453,6 +457,18 @@ void TrailService::queuePoint(
     lastPointLatitude_ = gps.latitude;
     lastPointLongitude_ = gps.longitude;
     lastPointAt_ = now;
+
+    if (view_.recentPointCount < AppConfig::MAP_RECENT_TRAIL_POINTS) {
+        view_.recentPoints[view_.recentPointCount++] = {gps.latitude, gps.longitude};
+    } else {
+        std::memmove(
+            &view_.recentPoints[0],
+            &view_.recentPoints[1],
+            (AppConfig::MAP_RECENT_TRAIL_POINTS - 1U) * sizeof(view_.recentPoints[0]));
+        view_.recentPoints[AppConfig::MAP_RECENT_TRAIL_POINTS - 1U] = {
+            gps.latitude, gps.longitude};
+    }
+    ++view_.recentPointRevision;
     ++view_.pointsWritten;
     ++view_.revision;
 }

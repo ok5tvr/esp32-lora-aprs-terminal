@@ -1,5 +1,57 @@
 # Changelog
 
+## 2.0.0
+
+- nova polozka hlavniho menu **Offline mapa**
+- standardni Web Mercator/XYZ projekce, zoom 3 az 18 a centrovani podle GPS nebo vychozi polohy
+- mapove dlazdice `/MAP/<z>/<x>/<y>.rgb`, 256 x 256 little-endian RGB565
+- progresivni nacitani nejvyse osmi radku dlazdice v jednom pruchodu smyckou
+- mapovy framebuffer 480 x 202 v PSRAM; bez PSRAM se mapa bezpecne vypne
+- modra vlastni poloha, plne APRS ikony stanic/objektu/polozek a cervene emergency oramovani
+- oranžova stopa poslednich 64 bodu Stopare, zachovana i po ukonceni relace
+- seda sachovnice a pocitadlo pri chybejici nebo poskozene dlazdici
+- ovladani Nahoru/Dolu pro zoom a OK pro nove centrovani
+- Python nastroj `tools/convert_map_tiles.py` pro prevod PNG/JPEG/WebP XYZ dlazdic
+- nove testy mapove projekce, stavoveho automatu nacitani, konvertoru a zachovani stopy
+
+## 1.5.0
+
+- zobrazeni nazvu a verze firmware na strance **Nastaveni**
+- nova samostatna polozka hlavniho menu **Diagnostika**
+- periodicke mereni aktualniho RSSI kanalu 433,775 MHz po peti minutach
+- jeden ulozeny bod je prumer osmi neblokujicich cteni RSSI po 25 ms; soucasne se uchovava spickova hodnota
+- kruhova historie poslednich 20 mereni, tedy priblizne 100 minut provozu
+- dvoukrivkovy LVGL graf: prumerne RSSI a nejsilnejsi hodnota v mericim okne
+- mereni probiha pouze v RX rezimu s prazdnou TX frontou; pri vysilani nebo cekajicim TX se odlozi
+- okamzite RSSI se cte primo pres RadioLib bez opusteni neblokujiciho prijmu
+
+## 1.4.1
+
+- fixed the PlatformIO build error in `RadioService`: `WeatherStore::ingest()` now receives `view_.lastPacketText` instead of the removed `view_.lastPacket` member
+- retained the complete 1.4.0 extended APRS parser and weather-station detail functionality without behavioral changes
+
+## 1.4.0
+
+- rozsireny APRS parser o uchovani typu polohy: normalni, komprimovana a Mic-E
+- rozsirene objekty a polozky vcetne kill reportu a frekvencnich objektu
+- klasicka telemetrie `T#`, PHG, frekvence, tone, offset a emergency priznak
+- emergency detekce z textoveho `!EMERGENCY!` a standardniho Mic-E stavu
+- detail stanice zobrazuje format, telemetrii, PHG, frekvenci a emergency
+- meteostanice maji vyber a samostatnou detailni obrazovku s poslednim TNC2 ramcem
+
+# Changelog
+
+## 1.3.1
+
+- replaced category-only station icons with complete 94-entry primary and 94-entry alternate APRS symbol tables generated from the supplied reference chart
+- made symbol rendering table-aware: `/` uses the primary table, `\` uses the alternate table, and digit/letter table identifiers use the alternate base plus an overlay
+- retained compressed-position numeric overlay normalization from `a..j` to `0..9`
+- corrected symbols that previously collapsed to the same generic image despite having different primary/alternate meanings
+- changed the tracker generic selection from incorrect red-X `/.` to generic red-dot `//` and renamed it to `Obecny bod`
+- kept compact alpha-only car, DIGI and iGate images for recolorable header status indicators
+- added a reproducible APRS chart-to-RGB565 asset generator and lookup regression test
+- retained the verified GPS GPIO4, RA-02 DIO0 GPIO2, TX queue, radio recovery and station navigation behavior
+
 ## 1.3.0
 
 - added a fixed eight-entry central RF TX queue with deterministic priorities: ACK, outgoing message, DIGI, manual beacon, tracker and test

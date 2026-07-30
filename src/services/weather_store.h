@@ -13,6 +13,8 @@ public:
     struct WeatherStation {
         bool used = false;
         char callsign[Aprs::MAX_SOURCE_CALL_LENGTH + 1] = {};
+        char entityName[Aprs::MAX_ENTITY_NAME_LENGTH + 1] = {};
+        Aprs::EntityType type = Aprs::EntityType::Station;
         char symbol[3] = {'-', '-', '\0'};
         bool hasPosition = false;
         double latitude = 0.0;
@@ -44,6 +46,7 @@ public:
         float lastSnrDb = 0.0F;
         std::uint32_t lastHeardMs = 0;
         std::uint32_t heardCount = 0;
+        char lastFrame[192] = {};
     };
 
     struct ViewState {
@@ -57,7 +60,8 @@ public:
         const Aprs::ParsedFrame& frame,
         float rssiDbm,
         float snrDb,
-        std::uint32_t now);
+        std::uint32_t now,
+        const char* lastFrame = nullptr);
     const ViewState& viewState() const;
 
 private:

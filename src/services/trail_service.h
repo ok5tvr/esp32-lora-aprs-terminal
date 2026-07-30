@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "app_config.h"
 #include "services/gps_service.h"
 
 namespace Services {
@@ -28,6 +29,11 @@ public:
         std::uint32_t sizeBytes = 0;
     };
 
+    struct RecentPoint {
+        double latitude = 0.0;
+        double longitude = 0.0;
+    };
+
     struct ViewState {
         bool configuredEnabled = false;
         bool sdMounted = false;
@@ -41,6 +47,9 @@ public:
         std::uint32_t droppedLines = 0;
         std::uint32_t elapsedSeconds = 0;
         double distanceKm = 0.0;
+        RecentPoint recentPoints[AppConfig::MAP_RECENT_TRAIL_POINTS] = {};
+        std::uint8_t recentPointCount = 0;
+        std::uint32_t recentPointRevision = 0;
         LogEntry logs[MAX_LOGS] = {};
         std::uint8_t logCount = 0;
         std::uint32_t revision = 0;
@@ -67,7 +76,7 @@ private:
     void closeSession(std::uint32_t now, const GpsService::ViewState* gps);
     void setState(State state, const char* text);
     void setError(const char* text);
-    void resetSessionRuntime();
+    void resetSessionRuntime(bool clearRecentTrail = true);
     bool queueLine(const char* line);
     void queueEvent(
         const char* eventName,

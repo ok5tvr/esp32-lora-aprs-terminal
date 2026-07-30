@@ -7,6 +7,7 @@
 #include <cstring>
 #include <lvgl.h>
 
+#include "app_config.h"
 #include "ui/ui_components.h"
 
 namespace Ui {
@@ -223,8 +224,8 @@ void create(
     createHeader("Nastaveni APRS");
 
     lv_obj_t* card = lv_obj_create(lv_scr_act());
-    lv_obj_set_size(card, 452, 190);
-    lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 55);
+    lv_obj_set_size(card, 452, 196);
+    lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 54);
     lv_obj_set_style_bg_color(card, lv_color_hex(0x17243A), 0);
     lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(card, lv_color_hex(0x31425F), 0);
@@ -236,6 +237,16 @@ void create(
     createFieldRow(card, "CALL", callsignDraft, Field::Callsign, 2, callsignArea);
     createFieldRow(card, "Sirka", latitudeDraft, Field::Latitude, 47, latitudeArea);
     createFieldRow(card, "Delka", longitudeDraft, Field::Longitude, 92, longitudeArea);
+
+    lv_obj_t* versionLabel = lv_label_create(card);
+    lv_label_set_text_fmt(
+        versionLabel,
+        "Firmware: %s v%s",
+        AppConfig::FIRMWARE_NAME,
+        AppConfig::FIRMWARE_VERSION);
+    lv_obj_set_style_text_font(versionLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(versionLabel, lv_color_hex(0x56C7FF), 0);
+    lv_obj_align(versionLabel, LV_ALIGN_TOP_LEFT, 4, 137);
 
     lv_obj_t* saveButton = lv_btn_create(card);
     lv_obj_set_size(saveButton, 132, 39);
@@ -252,7 +263,7 @@ void create(
     lv_label_set_long_mode(messageLabel, LV_LABEL_LONG_WRAP);
     lv_label_set_text(
         messageLabel,
-        state.persistentStorageReady ? "Hodnoty se ukladaji do NVS." : "NVS nebylo pri startu dostupne.");
+        state.persistentStorageReady ? "NVS: aktivni" : "NVS: nedostupne");
     lv_obj_set_style_text_font(messageLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(messageLabel, lv_color_hex(0x92A7C7), 0);
     lv_obj_align(messageLabel, LV_ALIGN_BOTTOM_LEFT, 4, -5);

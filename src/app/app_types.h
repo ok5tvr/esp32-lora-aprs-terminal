@@ -9,12 +9,15 @@ enum class ScreenId : std::uint8_t {
     Splash,
     MainMenu,
     LoRaStatus,
+    Diagnostics,
     Messages,
     GpsStatus,
+    Map,
     Stations,
     StationDetail,
     StationNavigation,
     Weather,
+    WeatherDetail,
     Tracker,
     Trail,
     Power,
@@ -32,7 +35,10 @@ enum class NavigationAction : std::uint8_t {
 enum class Command : std::uint8_t {
     None,
     SendTestPacket,
-    ToggleTrailPause
+    ToggleTrailPause,
+    MapZoomIn,
+    MapZoomOut,
+    MapRecenter
 };
 
 enum class TrackerPositionSource : std::uint8_t {

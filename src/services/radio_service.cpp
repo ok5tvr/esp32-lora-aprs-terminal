@@ -31,6 +31,14 @@ bool RadioService::begin() {
     wasTransmitting_ = false;
     lastRecoveryAttemptAt_ = 0;
     observedTransmitTimeouts_ = 0;
+    const std::uint32_t now = millis();
+    nextNoiseMeasurementAt_ = now + AppConfig::RADIO_NOISE_INITIAL_DELAY_MS;
+    lastNoiseBurstSampleAt_ = 0;
+    noiseBurstAccumulator_ = 0.0F;
+    noiseBurstPeakDbm_ = -170.0F;
+    noiseBurstSamples_ = 0;
+    noiseBurstActive_ = false;
+    view_.noiseNextMeasurementAtMs = nextNoiseMeasurementAt_;
     const bool ready = driver_.begin();
     refreshDriverStatus();
     refreshQueueStatus();
@@ -79,7 +87,7 @@ void RadioService::update(
                     packet.snrDb,
                     now,
                     view_.lastPacketText);
-                weatherStore_.ingest(parsed, packet.rssiDbm, packet.snrDb, now);
+                weatherStore_.ingest(parsed, packet.rssiDbm, packet.snrDb, now, view_.lastPacketText);
                 if (parsed.hasPosition) {
                     LOG_I(
                         "APRS",
@@ -118,6 +126,7 @@ void RadioService::update(
 
     messageStore_.update(now);
     refreshDriverStatus();
+    serviceNoiseMonitor(now);
     serviceMessageQueue(now, settings.callsign);
     serviceDigiQueue(now);
     serviceTxQueue(now);
@@ -125,6 +134,142 @@ void RadioService::update(
     serviceRecovery(now);
     refreshDriverStatus();
     refreshQueueStatus();
+}
+
+void RadioService::serviceNoiseMonitor(std::uint32_t now) {
+    view_.noiseNextMeasurementAtMs = nextNoiseMeasurementAt_;
+    view_.noiseMeasurementActive = noiseBurstActive_;
+    view_.noiseBurstProgress = noiseBurstSamples_;
+
+    const bool radioIdle = view_.initialized && view_.receiving && !view_.transmitting &&
+        txQueue_.stats().depth == 0U;
+
+    if (!noiseBurstActive_) {
+        if (!timeReached(now, nextNoiseMeasurementAt_)) {
+            return;
+        }
+        if (!radioIdle) {
+            nextNoiseMeasurementAt_ = now + AppConfig::RADIO_NOISE_RETRY_DELAY_MS;
+            view_.noiseNextMeasurementAtMs = nextNoiseMeasurementAt_;
+            return;
+        }
+
+        noiseBurstActive_ = true;
+        noiseBurstAccumulator_ = 0.0F;
+        noiseBurstPeakDbm_ = -170.0F;
+        noiseBurstSamples_ = 0;
+        lastNoiseBurstSampleAt_ = now - AppConfig::RADIO_NOISE_BURST_SPACING_MS;
+        view_.noiseMeasurementActive = true;
+        view_.noiseBurstProgress = 0;
+    }
+
+    if (!radioIdle) {
+        cancelNoiseBurst(now);
+        return;
+    }
+
+    if (!timeReached(now, lastNoiseBurstSampleAt_ + AppConfig::RADIO_NOISE_BURST_SPACING_MS)) {
+        return;
+    }
+
+    float sampleDbm = 0.0F;
+    if (!driver_.readCurrentRssi(sampleDbm)) {
+        cancelNoiseBurst(now);
+        return;
+    }
+
+    noiseBurstAccumulator_ += sampleDbm;
+    if (noiseBurstSamples_ == 0U || sampleDbm > noiseBurstPeakDbm_) {
+        noiseBurstPeakDbm_ = sampleDbm;
+    }
+    ++noiseBurstSamples_;
+    lastNoiseBurstSampleAt_ = now;
+    view_.noiseBurstProgress = noiseBurstSamples_;
+
+    if (noiseBurstSamples_ < AppConfig::RADIO_NOISE_BURST_SAMPLES) {
+        return;
+    }
+
+    const float averageDbm = noiseBurstAccumulator_ /
+        static_cast<float>(noiseBurstSamples_);
+    appendNoiseMeasurement(averageDbm, noiseBurstPeakDbm_, now);
+
+    noiseBurstActive_ = false;
+    noiseBurstSamples_ = 0;
+    noiseBurstAccumulator_ = 0.0F;
+    noiseBurstPeakDbm_ = -170.0F;
+    nextNoiseMeasurementAt_ = now + AppConfig::RADIO_NOISE_SAMPLE_INTERVAL_MS;
+    view_.noiseMeasurementActive = false;
+    view_.noiseBurstProgress = 0;
+    view_.noiseNextMeasurementAtMs = nextNoiseMeasurementAt_;
+}
+
+void RadioService::appendNoiseMeasurement(
+    float averageDbm,
+    float peakDbm,
+    std::uint32_t now) {
+
+    const std::size_t capacity = AppConfig::RADIO_NOISE_HISTORY_LENGTH;
+    std::size_t count = view_.noiseHistoryCount;
+    if (count < capacity) {
+        view_.noiseHistoryDbm[count] = averageDbm;
+        view_.noisePeakHistoryDbm[count] = peakDbm;
+        ++count;
+    } else {
+        std::memmove(
+            &view_.noiseHistoryDbm[0],
+            &view_.noiseHistoryDbm[1],
+            (capacity - 1U) * sizeof(view_.noiseHistoryDbm[0]));
+        std::memmove(
+            &view_.noisePeakHistoryDbm[0],
+            &view_.noisePeakHistoryDbm[1],
+            (capacity - 1U) * sizeof(view_.noisePeakHistoryDbm[0]));
+        view_.noiseHistoryDbm[capacity - 1U] = averageDbm;
+        view_.noisePeakHistoryDbm[capacity - 1U] = peakDbm;
+        count = capacity;
+    }
+
+    view_.noiseHistoryCount = static_cast<std::uint8_t>(count);
+    view_.noiseLatestAverageDbm = averageDbm;
+    view_.noiseLatestPeakDbm = peakDbm;
+    view_.noiseLastMeasurementAtMs = now;
+
+    float minimum = view_.noiseHistoryDbm[0];
+    float maximum = view_.noiseHistoryDbm[0];
+    float total = 0.0F;
+    for (std::size_t index = 0; index < count; ++index) {
+        const float value = view_.noiseHistoryDbm[index];
+        if (value < minimum) {
+            minimum = value;
+        }
+        if (value > maximum) {
+            maximum = value;
+        }
+        total += value;
+    }
+    view_.noiseHistoryMinDbm = minimum;
+    view_.noiseHistoryMaxDbm = maximum;
+    view_.noiseHistoryAverageDbm = total / static_cast<float>(count);
+    ++view_.noiseHistoryRevision;
+
+    LOG_I(
+        "NOISE",
+        "Channel RSSI avg %.1f dBm, peak %.1f dBm (%u/%u)",
+        static_cast<double>(averageDbm),
+        static_cast<double>(peakDbm),
+        static_cast<unsigned>(count),
+        static_cast<unsigned>(capacity));
+}
+
+void RadioService::cancelNoiseBurst(std::uint32_t now) {
+    noiseBurstActive_ = false;
+    noiseBurstSamples_ = 0;
+    noiseBurstAccumulator_ = 0.0F;
+    noiseBurstPeakDbm_ = -170.0F;
+    nextNoiseMeasurementAt_ = now + AppConfig::RADIO_NOISE_RETRY_DELAY_MS;
+    view_.noiseMeasurementActive = false;
+    view_.noiseBurstProgress = 0;
+    view_.noiseNextMeasurementAtMs = nextNoiseMeasurementAt_;
 }
 
 bool RadioService::sendTestPacket(const char* callsign, std::uint32_t now) {

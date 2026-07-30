@@ -5,9 +5,11 @@
 
 #include "app/menu_model.h"
 #include "app_config.h"
+#include "ui/screens/diagnostics_screen.h"
 #include "ui/screens/digi_igate_screen.h"
 #include "ui/screens/gps_screen.h"
 #include "ui/screens/lora_screen.h"
+#include "ui/screens/map_screen.h"
 #include "ui/screens/menu_screen.h"
 #include "ui/screens/messages_screen.h"
 #include "ui/screens/placeholder_screen.h"
@@ -20,6 +22,7 @@
 #include "ui/screens/trail_screen.h"
 #include "ui/screens/tracker_screen.h"
 #include "ui/screens/weather_screen.h"
+#include "ui/screens/weather_detail_screen.h"
 #include "ui/ui_components.h"
 #include "ui/ui_styles.h"
 
@@ -106,17 +109,29 @@ void ScreenManager::update(
     const Services::PowerService::ViewState& powerState,
     const Services::DigiIgateService::ViewState& digiIgateState,
     const Services::PositionReference& reference,
+    const Services::MapService::ViewState& mapState,
     const Services::SettingsService::ViewState& settingsState) {
 
     settingsState_ = settingsState;
+    radioState_ = &radioState;
     gpsState_ = gpsState;
     stationState_ = &stationState;
+    weatherState_ = &weatherState;
     refreshSelectedStation();
+    if (selectedWeatherValid_) {
+        for (std::size_t index = 0; index < weatherState.count; ++index) {
+            if (std::strcmp(weatherState.stations[index].callsign, selectedWeather_.callsign) == 0) {
+                selectedWeather_ = weatherState.stations[index];
+                break;
+            }
+        }
+    }
     trackerState_ = trackerState;
     trailState_ = trailState;
     powerState_ = powerState;
     digiIgateState_ = digiIgateState;
     referenceState_ = reference;
+    mapState_ = &mapState;
 
     const std::uint32_t messageDelta =
         messageState.receivedMessageEvents - observedMessageEvents_;
@@ -174,10 +189,14 @@ void ScreenManager::update(
                 newStationCount_));
     } else if (currentScreen_ == App::ScreenId::LoRaStatus) {
         LoRaScreen::update(radioState);
+    } else if (currentScreen_ == App::ScreenId::Diagnostics) {
+        DiagnosticsScreen::update(radioState, now);
     } else if (currentScreen_ == App::ScreenId::Messages) {
         MessagesScreen::update(messageState);
     } else if (currentScreen_ == App::ScreenId::GpsStatus) {
         GpsScreen::update(gpsState);
+    } else if (currentScreen_ == App::ScreenId::Map) {
+        MapScreen::update(mapState, stationState, trailState, reference);
     } else if (currentScreen_ == App::ScreenId::Stations) {
         StationsScreen::update(stationState, reference);
     } else if (currentScreen_ == App::ScreenId::StationDetail && selectedStationValid_) {
@@ -186,6 +205,8 @@ void ScreenManager::update(
         StationNavigationScreen::update(selectedStation_, reference, now);
     } else if (currentScreen_ == App::ScreenId::Weather) {
         WeatherScreen::update(weatherState, reference);
+    } else if (currentScreen_ == App::ScreenId::WeatherDetail && selectedWeatherValid_) {
+        WeatherDetailScreen::update(selectedWeather_, reference, now);
     } else if (currentScreen_ == App::ScreenId::Tracker) {
         TrackerScreen::update(gpsState, trackerState, settingsState);
     } else if (currentScreen_ == App::ScreenId::Trail) {
@@ -195,6 +216,10 @@ void ScreenManager::update(
     } else if (currentScreen_ == App::ScreenId::DigiIgate) {
         DigiIgateScreen::update(digiIgateState, settingsState);
     }
+}
+
+App::ScreenId ScreenManager::currentScreen() const {
+    return currentScreen_;
 }
 
 void ScreenManager::setMessage(const char* text) {
@@ -266,6 +291,8 @@ void ScreenManager::handleNavigation(App::NavigationAction action) {
             show(App::ScreenId::StationDetail);
         } else if (currentScreen_ == App::ScreenId::StationDetail) {
             show(App::ScreenId::Stations);
+        } else if (currentScreen_ == App::ScreenId::WeatherDetail) {
+            show(App::ScreenId::Weather);
         } else {
             showMainMenu();
         }
@@ -276,6 +303,19 @@ void ScreenManager::handleNavigation(App::NavigationAction action) {
         action == App::NavigationAction::Confirm &&
         commandHandler_ != nullptr) {
         commandHandler_(App::Command::SendTestPacket, commandContext_);
+        return;
+    }
+
+    if (currentScreen_ == App::ScreenId::Map) {
+        if (commandHandler_ != nullptr) {
+            if (action == App::NavigationAction::Up) {
+                commandHandler_(App::Command::MapZoomIn, commandContext_);
+            } else if (action == App::NavigationAction::Down) {
+                commandHandler_(App::Command::MapZoomOut, commandContext_);
+            } else if (action == App::NavigationAction::Confirm) {
+                commandHandler_(App::Command::MapRecenter, commandContext_);
+            }
+        }
         return;
     }
 
@@ -318,9 +358,17 @@ void ScreenManager::handleNavigation(App::NavigationAction action) {
         return;
     }
 
-    if (currentScreen_ == App::ScreenId::Weather &&
-        (action == App::NavigationAction::Up || action == App::NavigationAction::Down)) {
-        WeatherScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
+    if (currentScreen_ == App::ScreenId::Weather) {
+        if (action == App::NavigationAction::Up || action == App::NavigationAction::Down) {
+            WeatherScreen::moveSelection(action == App::NavigationAction::Up ? -1 : 1);
+        } else if (action == App::NavigationAction::Confirm && weatherState_ != nullptr && weatherState_->count > 0) {
+            const std::size_t index = WeatherScreen::selectedIndex();
+            if (index < weatherState_->count) {
+                selectedWeather_ = weatherState_->stations[index];
+                selectedWeatherValid_ = true;
+                show(App::ScreenId::WeatherDetail);
+            }
+        }
         return;
     }
 
@@ -393,11 +441,21 @@ void ScreenManager::show(App::ScreenId screen) {
                 newStationCount_));
     } else if (screen == App::ScreenId::LoRaStatus) {
         LoRaScreen::create();
+    } else if (screen == App::ScreenId::Diagnostics) {
+        DiagnosticsScreen::create();
+        if (radioState_ != nullptr) {
+            DiagnosticsScreen::update(*radioState_, millis());
+        }
     } else if (screen == App::ScreenId::Messages) {
         MessagesScreen::create(messageSendHandler_, messageSendContext_);
     } else if (screen == App::ScreenId::GpsStatus) {
         GpsScreen::create();
         GpsScreen::update(gpsState_);
+    } else if (screen == App::ScreenId::Map) {
+        MapScreen::create();
+        if (mapState_ != nullptr && stationState_ != nullptr) {
+            MapScreen::update(*mapState_, *stationState_, trailState_, referenceState_);
+        }
     } else if (screen == App::ScreenId::Stations) {
         StationsScreen::create();
     } else if (screen == App::ScreenId::StationDetail) {
@@ -412,6 +470,9 @@ void ScreenManager::show(App::ScreenId screen) {
         }
     } else if (screen == App::ScreenId::Weather) {
         WeatherScreen::create();
+    } else if (screen == App::ScreenId::WeatherDetail) {
+        WeatherDetailScreen::create();
+        if (selectedWeatherValid_) WeatherDetailScreen::update(selectedWeather_, referenceState_, millis());
     } else if (screen == App::ScreenId::Tracker) {
         TrackerScreen::create(
             settingsState_,

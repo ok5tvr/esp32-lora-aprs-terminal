@@ -5,9 +5,11 @@ namespace MenuModel {
 namespace {
 
 constexpr MenuItem ITEMS[ITEM_COUNT] = {
-    {"LoRa APRS", "Diagnostika radia, TX fronty a automaticke obnovy.", ScreenId::LoRaStatus},
+    {"LoRa APRS", "Stav radia, TX fronty a automaticke obnovy.", ScreenId::LoRaStatus},
+    {"Diagnostika", "Historie aktualniho RSSI na LoRa frekvenci.", ScreenId::Diagnostics},
     {"Zpravy", "Prijem, odesilani a potvrzovani APRS zprav.", ScreenId::Messages},
     {"GPS prijimac", "NMEA diagnostika, poloha, rychlost, smer a lokator.", ScreenId::GpsStatus},
+    {"Offline mapa", "Mapove dlazdice z SD, vlastni stopa a APRS stanice.", ScreenId::Map},
     {"Prijate stanice", "Vyber, detail a navigace k poslednim APRS entitam.", ScreenId::Stations},
     {"Meteostanice", "Poslednich 5 unikatnich APRS meteostanic.", ScreenId::Weather},
     {"Tracker", "GPS/default pozice, format a SmartBeacon.", ScreenId::Tracker},

@@ -51,6 +51,7 @@ public:
     void update(std::uint32_t now);
     bool startTransmit(const std::uint8_t* data, std::size_t length, std::uint32_t now);
     bool takePacket(Packet& packet);
+    bool readCurrentRssi(float& rssiDbm);
     const Status& status() const;
 
 private:

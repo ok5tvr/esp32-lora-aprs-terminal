@@ -46,8 +46,11 @@
 #define LV_USE_BTNMATRIX 1
 #define LV_USE_LABEL 1
 #define LV_USE_IMG 1
+#define LV_USE_CANVAS 1
+#define LV_USE_LINE 1
 #define LV_USE_DROPDOWN 1
 #define LV_USE_TEXTAREA 1
 #define LV_USE_KEYBOARD 1
+#define LV_USE_CHART 1
 
 #endif

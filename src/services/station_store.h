@@ -13,12 +13,17 @@ public:
     struct Station {
         bool used = false;
         bool hasPosition = false;
+        Aprs::PositionFormat positionFormat = Aprs::PositionFormat::None;
+        bool emergency = false;
         Aprs::EntityType type = Aprs::EntityType::Station;
         char callsign[Aprs::MAX_SOURCE_CALL_LENGTH + 1] = {};
         char entityName[Aprs::MAX_ENTITY_NAME_LENGTH + 1] = {};
         char symbol[3] = {'-', '-', '\0'};
         double latitude = 0.0;
         double longitude = 0.0;
+        Aprs::TelemetryData telemetry;
+        Aprs::PhgData phg;
+        Aprs::FrequencyData frequency;
         float lastRssiDbm = 0.0F;
         float lastSnrDb = 0.0F;
         std::uint32_t lastHeardMs = 0;

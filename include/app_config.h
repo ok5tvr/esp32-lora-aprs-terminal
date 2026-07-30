@@ -1,11 +1,12 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace AppConfig {
 
 constexpr char FIRMWARE_NAME[] = "LoRa APRS Terminal";
-constexpr char FIRMWARE_VERSION[] = "1.3.0";
+constexpr char FIRMWARE_VERSION[] = "2.0.0";
 constexpr char BOARD_NAME[] = "Waveshare ESP32-Touch-LCD-3.5";
 
 // Defaults used when no values have yet been saved in NVS.
@@ -30,7 +31,30 @@ constexpr std::uint32_t RADIO_TX_TIMEOUT_MS = 15000;
 constexpr std::uint32_t RADIO_TX_MIN_GAP_MS = 180;
 constexpr std::uint32_t RADIO_RECOVERY_RETRY_MS = 5000;
 constexpr std::uint8_t RADIO_RECOVERY_RX_ERROR_THRESHOLD = 3;
+
+// Background RSSI monitoring on the configured LoRa channel. One stored point
+// is the average of a short, non-blocking burst of instantaneous RSSI reads.
+constexpr std::uint32_t RADIO_NOISE_INITIAL_DELAY_MS = 15000;
+constexpr std::uint32_t RADIO_NOISE_SAMPLE_INTERVAL_MS = 300000;
+constexpr std::uint32_t RADIO_NOISE_RETRY_DELAY_MS = 5000;
+constexpr std::uint32_t RADIO_NOISE_BURST_SPACING_MS = 25;
+constexpr std::uint8_t RADIO_NOISE_BURST_SAMPLES = 8;
+constexpr std::size_t RADIO_NOISE_HISTORY_LENGTH = 20;
+static_assert(RADIO_NOISE_HISTORY_LENGTH > 0 && RADIO_NOISE_HISTORY_LENGTH <= 255,
+              "RSSI history length must fit the ViewState counter");
 constexpr std::uint32_t SD_SPI_FREQUENCY_HZ = 20000000;
+
+// Offline map. Tiles use standard Web Mercator XYZ coordinates and are stored
+// as 256 x 256 little-endian RGB565 files: /MAP/<z>/<x>/<y>.rgb.
+constexpr char MAP_DIRECTORY[] = "/MAP";
+constexpr std::uint8_t MAP_DEFAULT_ZOOM = 13;
+constexpr std::uint8_t MAP_MIN_ZOOM = 3;
+constexpr std::uint8_t MAP_MAX_ZOOM = 18;
+constexpr std::uint16_t MAP_RECENTER_THRESHOLD_PIXELS = 64;
+constexpr std::uint16_t MAP_TILE_ROWS_PER_UPDATE = 8;
+constexpr std::size_t MAP_RECENT_TRAIL_POINTS = 64;
+static_assert(MAP_RECENT_TRAIL_POINTS > 1 && MAP_RECENT_TRAIL_POINTS <= 255,
+              "Map trail history must fit the uint8_t counter");
 
 // AXP2101 power telemetry. Values are read-only; the firmware does not alter
 // charger current, target voltage, or PMIC output rails.

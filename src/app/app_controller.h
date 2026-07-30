@@ -7,6 +7,7 @@
 #include "drivers/button_driver.h"
 #include "services/geo_utils.h"
 #include "services/gps_service.h"
+#include "services/map_service.h"
 #include "services/power_service.h"
 #include "services/radio_service.h"
 #include "services/settings_service.h"
@@ -104,6 +105,7 @@ private:
     Services::GpsService gps_;
     Services::PowerService power_;
     Services::RadioService radio_;
+    Services::MapService map_;
     Services::TrackerService tracker_;
     Services::TrailService trail_;
     Services::PositionReference referencePosition_;

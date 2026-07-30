@@ -16,6 +16,8 @@ lv_obj_t* countLabel = nullptr;
 lv_obj_t* referenceLabel = nullptr;
 std::uint32_t renderedRevision = 0xFFFFFFFFU;
 std::uint32_t renderedReferenceRevision = 0xFFFFFFFFU;
+std::size_t selected = 0;
+const Services::WeatherStore::ViewState* currentState = nullptr;
 
 void createMetricLabel(
     lv_obj_t* row,
@@ -34,6 +36,7 @@ void createMetricLabel(
 
 void createWeatherRow(
     const Services::WeatherStore::WeatherStation& station,
+    bool isSelected,
     const Services::PositionReference& reference) {
 
     lv_obj_t* row = lv_obj_create(listObject);
@@ -41,7 +44,7 @@ void createWeatherRow(
     lv_obj_set_height(row, 108);
     lv_obj_set_style_bg_color(row, lv_color_hex(0x17243A), 0);
     lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(row, lv_color_hex(0x31425F), 0);
+    lv_obj_set_style_border_color(row, lv_color_hex(isSelected ? 0x56C7FF : 0x31425F), 0);
     lv_obj_set_style_border_width(row, 1, 0);
     lv_obj_set_style_radius(row, 10, 0);
     lv_obj_set_style_pad_left(row, 10, 0);
@@ -180,6 +183,7 @@ void create() {
     lv_obj_set_scrollbar_mode(listObject, LV_SCROLLBAR_MODE_AUTO);
     renderedRevision = 0xFFFFFFFFU;
     renderedReferenceRevision = 0xFFFFFFFFU;
+    selected = 0;
 }
 
 void update(
@@ -193,6 +197,8 @@ void update(
         renderedReferenceRevision == reference.revision) {
         return;
     }
+    currentState = &state;
+    if (state.count == 0) selected = 0; else if (selected >= state.count) selected = state.count - 1;
     renderedRevision = state.revision;
     renderedReferenceRevision = reference.revision;
     lv_obj_clean(listObject);
@@ -215,17 +221,20 @@ void update(
     }
 
     for (std::size_t index = 0; index < state.count; ++index) {
-        createWeatherRow(state.stations[index], reference);
+        createWeatherRow(state.stations[index], index == selected, reference);
     }
     lv_obj_scroll_to_y(listObject, 0, LV_ANIM_OFF);
 }
 
-void scroll(int direction) {
-    if (listObject == nullptr || direction == 0) {
-        return;
-    }
-    lv_obj_scroll_by(listObject, 0, direction > 0 ? -113 : 113, LV_ANIM_ON);
+void moveSelection(int direction) {
+    if (currentState == nullptr || currentState->count == 0 || direction == 0) return;
+    if (direction < 0) selected = selected == 0 ? currentState->count - 1 : selected - 1;
+    else selected = (selected + 1) % currentState->count;
+    renderedRevision = 0xFFFFFFFFU;
 }
+
+std::size_t selectedIndex() { return selected; }
+
 
 }  // namespace WeatherScreen
 }  // namespace Ui

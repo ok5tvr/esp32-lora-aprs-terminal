@@ -304,6 +304,41 @@ void test_parse_third_party_message() {
     TEST_ASSERT_EQUAL_STRING("Ahoj", message.text);
 }
 
+
+void test_parse_extended_aprs_fields() {
+    Aprs::ParsedFrame frame;
+    TEST_ASSERT_TRUE(Aprs::parseTnc2(
+        "WX1>APRS:!4903.50N/07201.75W_PHG5360 145.650MHz T088 +060 T#123,001,002,003,004,005,10101010 !EMERGENCY!",
+        frame));
+    TEST_ASSERT_EQUAL(Aprs::PositionFormat::Uncompressed, frame.positionFormat);
+    TEST_ASSERT_TRUE(frame.phg.valid);
+    TEST_ASSERT_EQUAL_UINT16(25, frame.phg.powerWatts);
+    TEST_ASSERT_EQUAL_UINT32(80, frame.phg.heightFeet);
+    TEST_ASSERT_TRUE(frame.frequency.valid);
+    TEST_ASSERT_FLOAT_WITHIN(0.001F, 145.650F, frame.frequency.frequencyMhz);
+    TEST_ASSERT_TRUE(frame.frequency.hasTone);
+    TEST_ASSERT_FLOAT_WITHIN(0.01F, 88.0F, frame.frequency.toneHz);
+    TEST_ASSERT_TRUE(frame.frequency.hasOffset);
+    TEST_ASSERT_FLOAT_WITHIN(0.01F, 0.6F, frame.frequency.offsetMhz);
+    TEST_ASSERT_TRUE(frame.telemetry.valid);
+    TEST_ASSERT_EQUAL_UINT16(123, frame.telemetry.sequence);
+    TEST_ASSERT_EQUAL_UINT16(5, frame.telemetry.analog[4]);
+    TEST_ASSERT_TRUE(frame.telemetry.digitalValid);
+    TEST_ASSERT_TRUE(frame.telemetry.digital[0]);
+    TEST_ASSERT_TRUE(frame.emergency);
+}
+
+void test_frequency_object() {
+    Aprs::ParsedFrame frame;
+    TEST_ASSERT_TRUE(Aprs::parseTnc2(
+        "OK1ABC>APRS:;145.650-R*092345z4903.50N/07201.75Wr145.650MHz T088 -060",
+        frame));
+    TEST_ASSERT_EQUAL(Aprs::EntityType::Object, frame.type);
+    TEST_ASSERT_TRUE(frame.frequency.valid);
+    TEST_ASSERT_FLOAT_WITHIN(0.001F, 145.650F, frame.frequency.frequencyMhz);
+    TEST_ASSERT_FLOAT_WITHIN(0.01F, -0.6F, frame.frequency.offsetMhz);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_encode_with_oe_header);
@@ -327,5 +362,7 @@ int main(int, char**) {
     RUN_TEST(test_build_and_parse_message_ack);
     RUN_TEST(test_message_rejects_forbidden_character);
     RUN_TEST(test_parse_third_party_message);
+    RUN_TEST(test_parse_extended_aprs_fields);
+    RUN_TEST(test_frequency_object);
     return UNITY_END();
 }

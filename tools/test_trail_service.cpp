@@ -128,11 +128,14 @@ int main() {
     auto movedAgain = gps(49.786333, 13.285150, 3.0F, 35);
     trail.update(35000, true, movedAgain);
     assert(trail.viewState().state == Services::TrailService::State::Recording);
+    assert(trail.viewState().recentPointCount >= 2U);
+    const std::uint8_t recentBeforeClose = trail.viewState().recentPointCount;
 
     const std::string active = trail.viewState().activeFile;
     trail.update(40000, false, movedAgain);
     assert(trail.viewState().state == Services::TrailService::State::Disabled);
     assert(!trail.viewState().fileOpen);
+    assert(trail.viewState().recentPointCount == recentBeforeClose);
 
     const std::string path = std::string("/STOPAR/") + active;
     const std::string& log = SD.content(path.c_str());

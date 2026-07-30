@@ -1,0 +1,8 @@
+{
+  "name": "AprsCore",
+  "version": "0.1.0",
+  "description": "Small hardware-independent helpers for LoRa APRS frames",
+  "build": {
+    "includeDir": "src"
+  }
+}

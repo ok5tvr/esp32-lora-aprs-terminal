@@ -1,6 +1,7 @@
 #include "services/weather_store.h"
 
 #include <cstring>
+#include <cstdio>
 
 namespace Services {
 
@@ -12,7 +13,8 @@ bool WeatherStore::ingest(
     const Aprs::ParsedFrame& frame,
     float rssiDbm,
     float snrDb,
-    std::uint32_t now) {
+    std::uint32_t now,
+    const char* lastFrame) {
 
     if (!frame.valid || !frame.weather.valid || frame.source[0] == '\0') {
         return false;
@@ -44,11 +46,17 @@ bool WeatherStore::ingest(
 
     updated.used = true;
     std::strncpy(updated.callsign, frame.source, sizeof(updated.callsign) - 1);
+    std::strncpy(updated.entityName, frame.entityName, sizeof(updated.entityName) - 1);
+    updated.type = frame.type;
     updated.callsign[sizeof(updated.callsign) - 1] = '\0';
+    updated.entityName[sizeof(updated.entityName) - 1] = '\0';
     updated.lastRssiDbm = rssiDbm;
     updated.lastSnrDb = snrDb;
     updated.lastHeardMs = now;
     ++updated.heardCount;
+    if (lastFrame != nullptr && lastFrame[0] != '\0') {
+        std::snprintf(updated.lastFrame, sizeof(updated.lastFrame), "%s", lastFrame);
+    }
 
     if (frame.hasPosition) {
         updated.hasPosition = true;

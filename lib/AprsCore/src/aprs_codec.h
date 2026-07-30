@@ -19,6 +19,13 @@ enum class EntityType : std::uint8_t {
     Item
 };
 
+enum class PositionFormat : std::uint8_t {
+    None,
+    Uncompressed,
+    Compressed,
+    MicE
+};
+
 enum class MessageKind : std::uint8_t {
     Text,
     Acknowledgement,
@@ -59,10 +66,39 @@ struct WeatherData {
     float solarRadiationWm2 = 0.0F;
 };
 
+struct TelemetryData {
+    bool valid = false;
+    bool hasSequence = false;
+    std::uint16_t sequence = 0;
+    bool analogValid[5] = {};
+    std::uint16_t analog[5] = {};
+    bool digitalValid = false;
+    bool digital[8] = {};
+};
+
+struct PhgData {
+    bool valid = false;
+    std::uint16_t powerWatts = 0;
+    std::uint32_t heightFeet = 0;
+    std::uint16_t gainDb = 0;
+    std::uint16_t directivityDegrees = 0;
+};
+
+struct FrequencyData {
+    bool valid = false;
+    float frequencyMhz = 0.0F;
+    bool hasTone = false;
+    float toneHz = 0.0F;
+    bool hasOffset = false;
+    float offsetMhz = 0.0F;
+};
+
 struct ParsedFrame {
     bool valid = false;
     bool hasPosition = false;
     bool alive = true;
+    PositionFormat positionFormat = PositionFormat::None;
+    bool emergency = false;
     EntityType type = EntityType::Station;
     char source[MAX_SOURCE_CALL_LENGTH + 1] = {};
     char entityName[MAX_ENTITY_NAME_LENGTH + 1] = {};
@@ -71,6 +107,9 @@ struct ParsedFrame {
     double latitude = 0.0;
     double longitude = 0.0;
     WeatherData weather;
+    TelemetryData telemetry;
+    PhgData phg;
+    FrequencyData frequency;
 };
 
 bool encodeTnc2(

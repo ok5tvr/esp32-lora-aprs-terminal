@@ -1,8 +1,10 @@
 # Waveshare ESP32-Touch-LCD-3.5 - LoRa APRS terminal
 
-> Version 1.3.0 adds a fixed-priority central TX queue, expanded LoRa
-> diagnostics, automatic RA-02 recovery, station details and bearing/distance
-> navigation. The verified GPS GPIO4 / LoRa DIO0 GPIO2 wiring remains unchanged.
+> Version 2.0.0 adds an offline Web Mercator map loaded incrementally from
+> RGB565 XYZ tiles on microSD. It displays the current GPS/default position,
+> the recent Stopar trail and positioned APRS stations, objects and items.
+> Version 1.5.0 RF-channel diagnostics and all earlier tracker, DIGI/iGate,
+> parser, power and navigation functions remain available.
 
 PlatformIO project for the **classic ESP32-D0WDR2-V3** Waveshare board with:
 
@@ -70,7 +72,10 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 - splash screen
 - touch menu with Up, Down, OK and Back buttons
 - onboard BOOT button short press for an immediate APRS position beacon
-- expanded LoRa diagnostics with APRS/decode counters, TX queue depth, drops and recovery history
+- LoRa status with APRS/decode counters, TX queue depth, drops and recovery history
+- dedicated **Diagnostika** page with a 20-point graph of five-minute background/channel RSSI measurements
+- dedicated **Offline mapa** page with microSD XYZ tiles, own position, recent Stopar trail and APRS entity symbols
+- firmware name and version displayed on the **Nastaveni** page
 - fixed eight-entry central TX queue with ACK, message, DIGI, manual beacon, tracker and test priorities
 - automatic RA-02-only recovery after initialization failure, TX timeout or repeated RX errors
 - non-blocking receive and queued test transmission
@@ -154,6 +159,20 @@ that the power summary does not overlap the existing service indicators.
 - The LoRa iGate icon `L&` is amber while connecting and green after the APRS-IS login is verified.
 
 
+
+## Complete APRS symbol tables in version 1.4.0
+
+Station and weather icons now use all 94 codes from both APRS tables. The first
+symbol character is no longer ignored: `/` selects the primary chart, `\` the
+alternate chart, and an overlay character selects the alternate base image and
+is drawn above it. This fixes collisions such as primary `/j` (jeep) versus
+alternate `\j` (excavator). The images are 30 x 30 RGB565 assets stored in
+Flash. Header service indicators remain recolorable alpha masks.
+
+The tracker selection formerly called `Obecna stanice /.` has been corrected to
+`Obecny bod //`, because `/.` is the red-X symbol in the APRS chart while `//`
+is the red dot.
+
 ## Radio scheduling and station navigation in version 1.3.0
 
 All RF transmissions now enter a fixed eight-entry RAM queue. No dynamic
@@ -180,6 +199,47 @@ OK starts simple bearing/distance navigation when the entity has a position.
 The reference is the live GPS fix when available, otherwise the configured
 default position. The displayed direction is a geographic bearing; the board
 has no enabled compass, so it is not a turn-by-turn heading indicator.
+
+## Offline map in version 2.0.0
+
+The **Offline mapa** screen reads standard Web Mercator XYZ tiles from the
+microSD card. To keep the embedded renderer small and deterministic, each tile
+is stored as a raw 256 x 256 little-endian RGB565 file:
+
+```text
+/MAP/<zoom>/<x>/<y>.rgb
+```
+
+The map follows the current GPS fix, or the configured default position when a
+fix is unavailable. It displays a blue own-position marker, up to 15 positioned
+APRS stations/objects/items with their full APRS symbols, emergency highlighting
+and an orange polyline containing the latest 64 Stopar points. Up/Down changes
+zoom from 3 through 18 and OK forces recentering.
+
+Tile reads are incremental: at most eight rows of one tile are read in a main
+loop pass, after GPS, LoRa RX/TX, tracker and Stopar processing. The 480 x 202
+RGB565 framebuffer uses 193920 bytes and is allocated in PSRAM.
+Missing tiles are shown as a grey checkerboard instead of blocking the terminal.
+
+Use `tools/convert_map_tiles.py` to convert an existing PNG/JPEG/WebP XYZ tile
+tree. Detailed preparation and licensing notes are in `docs/OFFLINE_MAP.md`.
+
+## Firmware and RF-channel diagnostics in version 1.5.0
+
+The **Nastaveni** page shows the firmware name and `AppConfig::FIRMWARE_VERSION`.
+The separate **Diagnostika** page monitors instantaneous SX1278 channel RSSI.
+After a short startup delay, one point is stored every five minutes. Each point
+is the average of eight register reads spaced 25 ms apart, while the strongest
+read is retained as the peak. The fixed RAM history contains 20 points and is
+cleared by a device restart.
+
+Measurements start only while the radio is initialized in continuous RX and
+the central TX queue is empty. If TX starts or traffic is queued during the
+short measurement burst, the burst is cancelled and retried later. Reading the
+RSSI register does not intentionally leave RX mode. The result should be
+interpreted as channel background/activity at the sampling moment: a legitimate
+LoRa packet or another signal can raise the measured value, so this is not a
+calibrated spectrum analyzer.
 
 ## AXP2101 power management in version 1.2.0
 
@@ -492,7 +552,7 @@ Interval      30, 60, 120, 180, 300, 600, 900, 1800 or 3600 seconds
 
 The symbol list contains car `/>`, pedestrian `/[`, bicycle `/b`, motorcycle
 `/<`, fixed QTH `/-`, boat `/s`, aircraft `/^`, balloon `/O`, weather station
-`/_`, generic station `/.` and LoRa iGate `L&`. The selection is stored in NVS
+`/_`, generic point `//` and LoRa iGate `L&`. The selection is stored in NVS
 and is used for both normal and compressed tracker packets.
 
 GPS-source tracking can be enabled only after a valid NMEA receiver has been
@@ -537,3 +597,8 @@ the saved tracker source, format and APRS symbol. The periodic tracker does not
 have to be enabled. GPS mode waits for a fresh fix; Default mode uses the saved
 coordinates. See `docs/HARDWARE_BUTTONS.md`. Do not hold BOOT during reset or
 power-up because GPIO0 also selects the ESP32 download mode.
+
+
+## APRS parser 1.4.0
+
+Parser rozlisuje stanice, objekty a polozky, normalni/komprimovanou/Mic-E polohu, klasickou telemetrii T#, PHG, emergency a frekvencni udaje v komentari. Seznam meteostanic podporuje vyber a otevreni samostatneho detailu tlacitkem OK.

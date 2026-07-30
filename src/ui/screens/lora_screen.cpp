@@ -23,7 +23,7 @@ lv_obj_t* messageLabel = nullptr;
 
 void create() {
     resetScreen();
-    createHeader("LoRa APRS / diagnostika");
+    createHeader("LoRa APRS");
 
     lv_obj_t* card = lv_obj_create(lv_scr_act());
     lv_obj_set_size(card, 450, 194);

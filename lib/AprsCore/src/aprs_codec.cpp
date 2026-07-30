@@ -107,6 +107,7 @@ bool parseUncompressedPosition(
     frame.symbolTable = static_cast<char>(position[8]);
     frame.symbolCode = static_cast<char>(position[18]);
     frame.hasPosition = true;
+    frame.positionFormat = PositionFormat::Uncompressed;
     return true;
 }
 
@@ -152,6 +153,7 @@ bool parseCompressedPosition(
     frame.symbolTable = static_cast<char>(position[0]);
     frame.symbolCode = static_cast<char>(position[9]);
     frame.hasPosition = true;
+    frame.positionFormat = PositionFormat::Compressed;
     return true;
 }
 
@@ -291,6 +293,11 @@ bool parseMicEPosition(
     frame.symbolCode = static_cast<char>(information[7]);
     frame.symbolTable = static_cast<char>(information[8]);
     frame.hasPosition = true;
+    frame.positionFormat = PositionFormat::MicE;
+    // Mic-E message bits are encoded in the first three destination bytes.
+    // 111 is the standard emergency state.
+    frame.emergency = micEHighBit(destination[0]) &&
+        micEHighBit(destination[1]) && micEHighBit(destination[2]);
     return true;
 }
 
@@ -479,6 +486,115 @@ void parseWeatherInformation(
     }
 }
 
+
+bool startsWithAt(const std::uint8_t* data, std::size_t length, std::size_t index, const char* text) {
+    const std::size_t n = std::strlen(text);
+    return data != nullptr && index + n <= length && std::memcmp(data + index, text, n) == 0;
+}
+
+void parseTelemetryInformation(const std::uint8_t* information, std::size_t length, ParsedFrame& frame) {
+    if (information == nullptr || length < 4) return;
+    // Classic APRS telemetry: T#nnn,aaa,bbb,ccc,ddd,eee,xxxxxxxx
+    for (std::size_t i = 0; i + 5 <= length; ++i) {
+        if (!startsWithAt(information, length, i, "T#")) continue;
+        TelemetryData t;
+        int seq = 0;
+        if (!parseUnsignedDigits(information, length, i + 2, 3, seq)) continue;
+        t.valid = true; t.hasSequence = true; t.sequence = static_cast<std::uint16_t>(seq);
+        std::size_t cursor = i + 5;
+        for (std::size_t channel = 0; channel < 5; ++channel) {
+            if (cursor >= length || information[cursor] != ',') break;
+            ++cursor;
+            int value = 0;
+            if (parseUnsignedDigits(information, length, cursor, 3, value)) {
+                t.analogValid[channel] = true;
+                t.analog[channel] = static_cast<std::uint16_t>(value);
+            }
+            cursor += 3;
+        }
+        if (cursor < length && information[cursor] == ',') {
+            ++cursor;
+            if (cursor + 8 <= length) {
+                bool ok = true;
+                for (std::size_t bit = 0; bit < 8; ++bit) {
+                    if (information[cursor + bit] != '0' && information[cursor + bit] != '1') { ok = false; break; }
+                    t.digital[bit] = information[cursor + bit] == '1';
+                }
+                t.digitalValid = ok;
+            }
+        }
+        frame.telemetry = t;
+        return;
+    }
+}
+
+void parsePhgInformation(const std::uint8_t* information, std::size_t length, ParsedFrame& frame) {
+    for (std::size_t i = 0; i + 7 <= length; ++i) {
+        if (!startsWithAt(information, length, i, "PHG")) continue;
+        const auto d=[&](std::size_t x)->int { return information[x] >= '0' && information[x] <= '9' ? information[x]-'0' : -1; };
+        int p=d(i+3), h=d(i+4), g=d(i+5), dir=d(i+6);
+        if (p<0||h<0||g<0||dir<0) continue;
+        frame.phg.valid=true;
+        frame.phg.powerWatts=static_cast<std::uint16_t>(p*p);
+        frame.phg.heightFeet=static_cast<std::uint32_t>(10U << h);
+        frame.phg.gainDb=static_cast<std::uint16_t>(g);
+        frame.phg.directivityDegrees=static_cast<std::uint16_t>(dir*45);
+        return;
+    }
+}
+
+void parseFrequencyInformation(const std::uint8_t* information, std::size_t length, ParsedFrame& frame) {
+    // APRS frequency specification convention: nnn.nnnMHz in the comment/object name.
+    for (std::size_t i=0; i+10<=length; ++i) {
+        int a=0,b=0;
+        if (parseUnsignedDigits(information,length,i,3,a) && information[i+3]=='.' &&
+            parseUnsignedDigits(information,length,i+4,3,b) &&
+            (startsWithAt(information,length,i+7,"MHz") || startsWithAt(information,length,i+7,"mhz"))) {
+            const float f=static_cast<float>(a)+static_cast<float>(b)/1000.0F;
+            if (f>=100.0F && f<=1000.0F) { frame.frequency.valid=true; frame.frequency.frequencyMhz=f; }
+            break;
+        }
+    }
+    for (std::size_t i=0; i+4<=length; ++i) {
+        if ((information[i]=='T' || information[i]=='t') && information[i+1]>='0' && information[i+1]<='9') {
+            int tone=0;
+            if (parseUnsignedDigits(information,length,i+1,3,tone)) {
+                frame.frequency.hasTone=true; frame.frequency.toneHz=static_cast<float>(tone);
+            }
+        }
+        if ((information[i]=='+' || information[i]=='-') && information[i+1]>='0' && information[i+1]<='9') {
+            int offset=0;
+            if (parseUnsignedDigits(information,length,i+1,3,offset)) {
+                frame.frequency.hasOffset=true;
+                frame.frequency.offsetMhz=static_cast<float>(offset)/100.0F * (information[i]=='-' ? -1.0F : 1.0F);
+            }
+        }
+    }
+}
+
+void parseEmergencyInformation(const std::uint8_t* information, std::size_t length, ParsedFrame& frame) {
+    static const char* tokens[] = {"!EMERGENCY!", "EMERGENCY", "!TESTALARM!"};
+    for (const char* token : tokens) {
+        const std::size_t n=std::strlen(token);
+        for (std::size_t i=0;i+n<=length;++i) {
+            bool same=true;
+            for (std::size_t j=0;j<n;++j) {
+                char a=static_cast<char>(information[i+j]); char b=token[j];
+                if (a>='a'&&a<='z') a=static_cast<char>(a-'a'+'A');
+                if (a!=b) {same=false;break;}
+            }
+            if (same) { frame.emergency=true; return; }
+        }
+    }
+}
+
+void parseExtendedInformation(const std::uint8_t* information, std::size_t length, ParsedFrame& frame) {
+    parseTelemetryInformation(information,length,frame);
+    parsePhgInformation(information,length,frame);
+    parseFrequencyInformation(information,length,frame);
+    parseEmergencyInformation(information,length,frame);
+}
+
 bool parseObject(
     const std::uint8_t* information,
     std::size_t length,
@@ -602,6 +718,7 @@ bool parseTnc2Internal(
             return false;
         }
         parseWeatherInformation(information, informationLength, parsed);
+        parseExtendedInformation(information, informationLength, parsed);
         frame = parsed;
         return true;
     }
@@ -611,6 +728,7 @@ bool parseTnc2Internal(
             return false;
         }
         parseWeatherInformation(information, informationLength, parsed);
+        parseExtendedInformation(information, informationLength, parsed);
         frame = parsed;
         return true;
     }
@@ -636,6 +754,7 @@ bool parseTnc2Internal(
         parsePositionInformation(information, informationLength, parsed);
     }
     parseWeatherInformation(information, informationLength, parsed);
+    parseExtendedInformation(information, informationLength, parsed);
 
     frame = parsed;
     return true;
