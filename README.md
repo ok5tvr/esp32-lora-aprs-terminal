@@ -1,6 +1,6 @@
 # Waveshare ESP32-Touch-LCD-3.5 - LoRa APRS terminal
 
-> Version 2.7.1 extends the fully offline **Astronomie / Astronomy** page with a dynamically drawn Moon phase and current Sun altitude.
+> Version 2.7.2 extends the fully offline **Astronomie / Astronomy** page with a dynamically drawn Moon phase and current Sun altitude.
 > It calculates Sun and Moon rise/set times and the current Moon phase from
 > GPS/default position and the date maintained by GPS-synchronized RTC.
 
@@ -17,13 +17,13 @@ PlatformIO project for the **classic ESP32-D0WDR2-V3** Waveshare board with:
 This project is **not** for the ESP32-S3 version of the board.
 
 
-### Astronomy 2.7.1 additions
+### Astronomy 2.7.2
 
 - Moon phase is rendered directly by LVGL from the calculated elongation; no image files are required.
 - Current Sun altitude is displayed in degrees, including negative values below the horizon.
 - Dynamic astronomy values refresh every five minutes, while date or significant position changes force an immediate recalculation.
 
-## Main menu order in version 2.7.1
+## Main menu order in version 2.7.2
 
 1. LoRa APRS
 2. Prijate stanice / Received stations

@@ -15,8 +15,8 @@ namespace AstronomyScreen {
 namespace {
 
 constexpr std::uint16_t MOON_CANVAS_SIZE = 68U;
-constexpr double PI = 3.14159265358979323846;
-constexpr double DEG_TO_RAD = PI / 180.0;
+constexpr double ASTRO_PI = 3.14159265358979323846;
+constexpr double ASTRO_DEG_TO_RAD = ASTRO_PI / 180.0;
 
 lv_obj_t* dateLabel = nullptr;
 lv_obj_t* positionLabel = nullptr;
@@ -83,7 +83,7 @@ void drawMoon(double elongationDegrees) {
     const lv_color_t litHigh = lv_color_hex(0xFFF5C9);
     const double center = (static_cast<double>(MOON_CANVAS_SIZE) - 1.0) * 0.5;
     const double radius = center - 2.0;
-    const double elongation = elongationDegrees * DEG_TO_RAD;
+    const double elongation = elongationDegrees * ASTRO_DEG_TO_RAD;
     const double sunX = std::sin(elongation);
     const double sunZ = -std::cos(elongation);
 

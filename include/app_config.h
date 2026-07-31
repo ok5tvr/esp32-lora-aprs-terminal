@@ -6,7 +6,7 @@
 namespace AppConfig {
 
 constexpr char FIRMWARE_NAME[] = "LoRa APRS Terminal";
-constexpr char FIRMWARE_VERSION[] = "2.7.1";
+constexpr char FIRMWARE_VERSION[] = "2.7.2";
 constexpr char BOARD_NAME[] = "Waveshare ESP32-Touch-LCD-3.5";
 
 // Defaults used when no values have yet been saved in NVS.

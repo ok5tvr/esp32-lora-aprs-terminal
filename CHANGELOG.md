@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.7.2
+
+- Fixed Arduino macro collision in `astronomy_screen.cpp`.
+- Renamed local constants `PI` and `DEG_TO_RAD` to `ASTRO_PI` and `ASTRO_DEG_TO_RAD`.
+- No functional change to astronomy calculations or the five-minute refresh interval.
+
 ## 2.7.1
 
 - Added a dynamically drawn Moon phase disk to the Astronomy page; no bitmap assets are stored in Flash.
