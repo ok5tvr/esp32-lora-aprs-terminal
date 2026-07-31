@@ -22,6 +22,7 @@ public:
         bool active = false;
         bool centerValid = false;
         bool centerFromGps = false;
+        bool followReference = true;
         bool loading = false;
         std::uint16_t* pixels = nullptr;
         std::uint16_t width = VIEW_WIDTH;
@@ -36,7 +37,7 @@ public:
         std::uint8_t missingTiles = 0;
         std::uint32_t bufferRevision = 0;
         std::uint32_t viewRevision = 0;
-        char statusText[112] = "Offline mapa neni inicializovana.";
+        char statusText[112] = "--";
     };
 
     bool begin();
@@ -47,6 +48,7 @@ public:
     void zoomIn();
     void zoomOut();
     void recenter();
+    void panByPixels(std::int16_t deltaX, std::int16_t deltaY);
     const ViewState& viewState() const;
 
     static MapProjection::ScreenPoint project(
@@ -88,7 +90,10 @@ private:
     std::uint8_t currentJob_ = 0;
     File currentTile_;
     std::uint8_t requestedZoom_ = 13;
+    PositionReference manualReference_;
+    std::uint32_t manualReferenceRevision_ = 0;
     std::uint32_t lastReferenceRevision_ = 0;
+    bool followReference_ = true;
     bool forceRender_ = true;
     bool wasActive_ = false;
 };

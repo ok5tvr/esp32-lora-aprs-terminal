@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "app_config.h"
+#include "app/localization.h"
 #include "app_log.h"
 #include "lora_profile.h"
 
@@ -16,10 +17,34 @@ bool timeReached(std::uint32_t now, std::uint32_t target) {
     return static_cast<std::int32_t>(now - target) >= 0;
 }
 
+LoRaProfile::Config configFromSettings(
+    const SettingsService::ViewState& settings) {
+
+    LoRaProfile::Config config;
+    config.frequencyMHz = settings.loraFrequencyMHz;
+    config.bandwidthKHz = settings.loraBandwidthKHz;
+    config.spreadingFactor = settings.loraSpreadingFactor;
+    config.codingRate = settings.loraCodingRate;
+    config.outputPowerDbm = settings.loraOutputPowerDbm;
+    return LoRaProfile::isValidConfig(config)
+        ? config
+        : LoRaProfile::czeAprsConfig();
+}
+
 }  // namespace
 
-bool RadioService::begin() {
+bool RadioService::begin(const SettingsService::ViewState& settings) {
     view_ = ViewState{};
+    localizationRevision_ = App::Localization::revision();
+    noticeKind_ = NoticeKind::NotNeeded;
+    recoveryReason_ = RecoveryReason::None;
+    noticeError_ = 0;
+    refreshLocalizedNotice();
+    std::snprintf(
+        view_.lastPacketText,
+        sizeof(view_.lastPacketText),
+        "%s",
+        App::Localization::text("Cekam na prvni paket...", "Waiting for the first packet..."));
     stationStore_.clear();
     weatherStore_.clear();
     messageStore_.clear();
@@ -39,15 +64,67 @@ bool RadioService::begin() {
     noiseBurstSamples_ = 0;
     noiseBurstActive_ = false;
     view_.noiseNextMeasurementAtMs = nextNoiseMeasurementAt_;
-    const bool ready = driver_.begin();
+    desiredConfig_ = configFromSettings(settings);
+    desiredPreset_ = settings.loraPreset;
+    configurationPending_ = false;
+    const bool ready = driver_.begin(desiredConfig_);
+    updateConfigurationView();
     refreshDriverStatus();
     refreshQueueStatus();
     return ready;
 }
 
+void RadioService::requestConfiguration(
+    const SettingsService::ViewState& settings) {
+
+    const LoRaProfile::Config requested = configFromSettings(settings);
+    desiredPreset_ = settings.loraPreset;
+    if (LoRaProfile::sameConfig(requested, driver_.config())) {
+        // A second save can cancel a not-yet-applied change by selecting the
+        // currently active RF parameters again.
+        desiredConfig_ = requested;
+        const bool cancelledPendingChange = configurationPending_;
+        configurationPending_ = false;
+        updateConfigurationView();
+        if (cancelledPendingChange && noticeKind_ == NoticeKind::ConfigurationWaiting) {
+            noticeKind_ = NoticeKind::NotNeeded;
+            refreshLocalizedNotice();
+        }
+        return;
+    }
+
+    desiredConfig_ = requested;
+    configurationPending_ = true;
+    view_.loraConfigurationPending = true;
+    noticeKind_ = NoticeKind::ConfigurationWaiting;
+    refreshLocalizedNotice();
+    LOG_I(
+        "RADIO",
+        "Configuration requested %.3f MHz BW %.1f SF%u CR4/%u P%d",
+        static_cast<double>(desiredConfig_.frequencyMHz),
+        static_cast<double>(desiredConfig_.bandwidthKHz),
+        static_cast<unsigned>(desiredConfig_.spreadingFactor),
+        static_cast<unsigned>(desiredConfig_.codingRate),
+        static_cast<int>(desiredConfig_.outputPowerDbm));
+}
+
 void RadioService::update(
     std::uint32_t now,
     const SettingsService::ViewState& settings) {
+
+    if (localizationRevision_ != App::Localization::revision()) {
+        localizationRevision_ = App::Localization::revision();
+        refreshLocalizedNotice();
+        if (view_.receivedPackets == 0U) {
+            std::snprintf(
+                view_.lastPacketText,
+                sizeof(view_.lastPacketText),
+                "%s",
+                App::Localization::text(
+                    "Cekam na prvni paket...",
+                    "Waiting for the first packet..."));
+        }
+    }
 
     // Keep network, RF reception and protocol parsing ahead of queued TX work.
     digiIgate_.update(now, settings);
@@ -124,6 +201,7 @@ void RadioService::update(
         LOG_I("APRS", "RX: %s", view_.lastPacketText);
     }
 
+    servicePendingConfiguration(now);
     messageStore_.update(now);
     refreshDriverStatus();
     serviceNoiseMonitor(now);
@@ -134,6 +212,52 @@ void RadioService::update(
     serviceRecovery(now);
     refreshDriverStatus();
     refreshQueueStatus();
+}
+
+void RadioService::updateConfigurationView() {
+    const LoRaProfile::Config& active = driver_.config();
+    view_.loraPreset = desiredPreset_;
+    view_.loraFrequencyMHz = active.frequencyMHz;
+    view_.loraBandwidthKHz = active.bandwidthKHz;
+    view_.loraSpreadingFactor = active.spreadingFactor;
+    view_.loraCodingRate = active.codingRate;
+    view_.loraOutputPowerDbm = active.outputPowerDbm;
+    view_.loraConfigurationPending = configurationPending_;
+}
+
+void RadioService::servicePendingConfiguration(std::uint32_t now) {
+    if (!configurationPending_) {
+        return;
+    }
+
+    const Drivers::Sx1278Driver::Status& status = driver_.status();
+    if (status.mode == Drivers::Sx1278Driver::Mode::Transmitting ||
+        txQueue_.stats().depth != 0U) {
+        return;
+    }
+
+    cancelNoiseBurst(now);
+    const bool ready = driver_.reconfigure(desiredConfig_);
+    configurationPending_ = false;
+    updateConfigurationView();
+    refreshDriverStatus();
+    nextNoiseMeasurementAt_ = now + AppConfig::RADIO_NOISE_INITIAL_DELAY_MS;
+    view_.noiseNextMeasurementAtMs = nextNoiseMeasurementAt_;
+
+    if (ready) {
+        noticeKind_ = NoticeKind::ConfigurationApplied;
+        noticeError_ = 0;
+        refreshLocalizedNotice();
+        LOG_I("RADIO", "LoRa configuration applied");
+    } else {
+        noticeKind_ = NoticeKind::ConfigurationFailed;
+        noticeError_ = driver_.status().lastError;
+        refreshLocalizedNotice();
+        LOG_E(
+            "RADIO",
+            "LoRa configuration failed: %d",
+            static_cast<int>(driver_.status().lastError));
+    }
 }
 
 void RadioService::serviceNoiseMonitor(std::uint32_t now) {
@@ -545,6 +669,71 @@ void RadioService::onTransmissionStarted(
           static_cast<unsigned>(item.length));
 }
 
+const char* RadioService::recoveryReasonText() const {
+    switch (recoveryReason_) {
+        case RecoveryReason::RadioOffline:
+            return App::Localization::text("radio offline", "radio offline");
+        case RecoveryReason::ErrorState:
+            return App::Localization::text("stav ERROR", "ERROR state");
+        case RecoveryReason::RepeatedReceiveError:
+            return App::Localization::text("opakovana RX chyba", "repeated RX error");
+        case RecoveryReason::TransmitTimeout:
+            return App::Localization::text("TX timeout", "TX timeout");
+        default:
+            return "--";
+    }
+}
+
+void RadioService::refreshLocalizedNotice() {
+    switch (noticeKind_) {
+        case NoticeKind::ConfigurationWaiting:
+            std::snprintf(
+                view_.lastRecoveryText,
+                sizeof(view_.lastRecoveryText),
+                "%s",
+                App::Localization::text(
+                    "LoRa zmena ceka na volne radio",
+                    "LoRa change is waiting for the radio to become idle"));
+            break;
+        case NoticeKind::ConfigurationApplied:
+            std::snprintf(
+                view_.lastRecoveryText,
+                sizeof(view_.lastRecoveryText),
+                "%s",
+                App::Localization::text("LoRa profil aplikovan", "LoRa profile applied"));
+            break;
+        case NoticeKind::ConfigurationFailed:
+            std::snprintf(
+                view_.lastRecoveryText,
+                sizeof(view_.lastRecoveryText),
+                App::Localization::text("LoRa profil: chyba %d", "LoRa profile: error %d"),
+                static_cast<int>(noticeError_));
+            break;
+        case NoticeKind::RecoverySucceeded:
+            std::snprintf(
+                view_.lastRecoveryText,
+                sizeof(view_.lastRecoveryText),
+                "OK: %s",
+                recoveryReasonText());
+            break;
+        case NoticeKind::RecoveryFailed:
+            std::snprintf(
+                view_.lastRecoveryText,
+                sizeof(view_.lastRecoveryText),
+                App::Localization::text("SELHANI: %s", "FAILED: %s"),
+                recoveryReasonText());
+            break;
+        case NoticeKind::NotNeeded:
+        default:
+            std::snprintf(
+                view_.lastRecoveryText,
+                sizeof(view_.lastRecoveryText),
+                "%s",
+                App::Localization::text("Zatim nebyla potreba", "Not needed yet"));
+            break;
+    }
+}
+
 void RadioService::serviceRecovery(std::uint32_t now) {
     const Drivers::Sx1278Driver::Status& status = driver_.status();
     const bool timeoutObserved = status.transmitTimeouts != observedTransmitTimeouts_;
@@ -552,34 +741,36 @@ void RadioService::serviceRecovery(std::uint32_t now) {
         observedTransmitTimeouts_ = status.transmitTimeouts;
     }
 
-    const char* reason = nullptr;
+    RecoveryReason reason = RecoveryReason::None;
     if (!status.initialized) {
-        reason = "radio offline";
+        reason = RecoveryReason::RadioOffline;
     } else if (status.mode == Drivers::Sx1278Driver::Mode::Error) {
-        reason = "stav ERROR";
+        reason = RecoveryReason::ErrorState;
     } else if (status.consecutiveReceiveErrors >= AppConfig::RADIO_RECOVERY_RX_ERROR_THRESHOLD) {
-        reason = "opakovana RX chyba";
+        reason = RecoveryReason::RepeatedReceiveError;
     } else if (timeoutObserved) {
-        reason = "TX timeout";
+        reason = RecoveryReason::TransmitTimeout;
     }
 
-    if (reason == nullptr ||
+    if (reason == RecoveryReason::None ||
         (lastRecoveryAttemptAt_ != 0 &&
          !timeReached(now, lastRecoveryAttemptAt_ + AppConfig::RADIO_RECOVERY_RETRY_MS))) {
         return;
     }
 
+    recoveryReason_ = reason;
     lastRecoveryAttemptAt_ = now;
     ++view_.recoveryAttempts;
-    LOG_E("RADIO", "Automatic recovery: %s", reason);
+    LOG_E("RADIO", "Automatic recovery: %s", recoveryReasonText());
     const bool recovered = driver_.recover();
     if (recovered) {
         ++view_.successfulRecoveries;
-        std::snprintf(view_.lastRecoveryText, sizeof(view_.lastRecoveryText), "OK: %s", reason);
+        noticeKind_ = NoticeKind::RecoverySucceeded;
     } else {
         ++view_.recoveryFailures;
-        std::snprintf(view_.lastRecoveryText, sizeof(view_.lastRecoveryText), "SELHANI: %s", reason);
+        noticeKind_ = NoticeKind::RecoveryFailed;
     }
+    refreshLocalizedNotice();
 }
 
 }  // namespace Services

@@ -35,7 +35,7 @@ public:
         std::uint16_t configuredChargeCurrentMa = 0;
         std::uint16_t targetChargeVoltageMv = 0;
         ChargerState chargerState = ChargerState::Unknown;
-        char operatingText[24] = "nedostupne";
+        char operatingText[24] = "--";
         char chargerText[28] = "neznamy stav";
         char lastEvent[48] = "AXP2101 nebyl inicializovan";
         std::uint32_t revision = 0;
@@ -51,6 +51,7 @@ private:
 
     ViewState view_;
     std::uint32_t lastPollAt_ = 0;
+    std::uint32_t localizationRevision_ = 0;
 };
 
 }  // namespace Services

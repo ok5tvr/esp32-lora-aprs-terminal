@@ -4,6 +4,7 @@
 #include <cstring>
 #include <lvgl.h>
 
+#include "app/localization.h"
 #include "services/geo_utils.h"
 #include "ui/aprs_icons.h"
 #include "ui/ui_components.h"
@@ -25,19 +26,19 @@ bool renderedHasPosition = false;
 
 const char* entityTypeName(Aprs::EntityType type) {
     switch (type) {
-        case Aprs::EntityType::Object: return "Objekt";
-        case Aprs::EntityType::Item: return "Polozka";
-        default: return "Stanice";
+        case Aprs::EntityType::Object: return App::Localization::text("Objekt", "Object");
+        case Aprs::EntityType::Item: return App::Localization::text("Polozka", "Item");
+        default: return App::Localization::text("Stanice", "Station");
     }
 }
 
 
 const char* positionFormatName(Aprs::PositionFormat format) {
     switch (format) {
-        case Aprs::PositionFormat::Uncompressed: return "normalni";
-        case Aprs::PositionFormat::Compressed: return "komprimovana";
+        case Aprs::PositionFormat::Uncompressed: return App::Localization::text("normalni", "standard");
+        case Aprs::PositionFormat::Compressed: return App::Localization::text("komprimovana", "compressed");
         case Aprs::PositionFormat::MicE: return "Mic-E";
-        default: return "bez polohy";
+        default: return App::Localization::text("bez polohy", "no position");
     }
 }
 
@@ -62,7 +63,7 @@ void create() {
     renderedSymbolTable = '\0';
     renderedSymbolCode = '\0';
     renderedHasPosition = false;
-    createHeader("Detail APRS entity");
+    createHeader(App::Localization::text("Detail APRS entity", "APRS entity details"));
 
     lv_obj_t* card = lv_obj_create(lv_scr_act());
     lv_obj_set_size(card, 450, 194);
@@ -110,7 +111,7 @@ void create() {
     lv_obj_align(packetLabel, LV_ALIGN_TOP_LEFT, 0, 124);
 
     actionLabel = lv_label_create(lv_scr_act());
-    lv_label_set_text(actionLabel, "OK = navigace ke stanici");
+    lv_label_set_text(actionLabel, App::Localization::text("OK = navigace ke stanici", "OK = navigate to station"));
     lv_obj_set_style_text_font(actionLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(actionLabel, lv_color_hex(0x92A7C7), 0);
     lv_obj_align(actionLabel, LV_ALIGN_BOTTOM_MID, 0, -72);
@@ -146,7 +147,7 @@ void update(
     formatAge(age, sizeof(age), now - station.lastHeardMs);
     lv_label_set_text_fmt(
         identityLabel,
-        "%s | zdroj %s | naposledy %s | paketu %lu",
+        App::Localization::text("%s | zdroj %s | naposledy %s | paketu %lu", "%s | source %s | last heard %s | packets %lu"),
         entityTypeName(station.type),
         station.callsign,
         age,
@@ -160,7 +161,7 @@ void update(
         if (relative.valid) {
             lv_label_set_text_fmt(
                 positionLabel,
-                "Poloha: %.5f, %.5f\nVzdalenost: %.2f km | azimut %03.0f deg %s | ref. %s",
+                App::Localization::text("Poloha: %.5f, %.5f\nVzdalenost: %.2f km | azimut %03.0f deg %s | ref. %s", "Position: %.5f, %.5f\nDistance: %.2f km | bearing %03.0f deg %s | ref. %s"),
                 station.latitude,
                 station.longitude,
                 relative.distanceKm,
@@ -168,14 +169,18 @@ void update(
                 Services::cardinalDirection(relative.bearingDegrees),
                 reference.fromGps ? "GPS" : "DEF");
         } else {
-            lv_label_set_text_fmt(positionLabel, "Poloha: %.5f, %.5f\nVzdalenost: --", station.latitude, station.longitude);
+            lv_label_set_text_fmt(positionLabel, App::Localization::text("Poloha: %.5f, %.5f\nVzdalenost: --", "Position: %.5f, %.5f\nDistance: --"), station.latitude, station.longitude);
         }
     } else {
-        lv_label_set_text(positionLabel, "Poloha nebyla v poslednim paketu uvedena.\nNavigace neni dostupna.");
+        lv_label_set_text(
+            positionLabel,
+            App::Localization::text(
+                "Poloha nebyla v poslednim paketu uvedena.\nNavigace neni dostupna.",
+                "The latest packet contains no position.\nNavigation is unavailable."));
     }
 
     char protocol[220] = {};
-    std::snprintf(protocol, sizeof(protocol), "Format %s | symbol %c%c | RSSI %.1f | SNR %.1f",
+    std::snprintf(protocol, sizeof(protocol), App::Localization::text("Format %s | symbol %c%c | RSSI %.1f | SNR %.1f", "Format %s | symbol %c%c | RSSI %.1f | SNR %.1f"),
         positionFormatName(station.positionFormat), station.symbol[0], station.symbol[1],
         static_cast<double>(station.lastRssiDbm), static_cast<double>(station.lastSnrDb));
     if (station.emergency) std::strncat(protocol, " | EMERGENCY", sizeof(protocol)-std::strlen(protocol)-1);
@@ -194,9 +199,17 @@ void update(
     }
     lv_label_set_text(signalLabel, protocol);
     lv_label_set_text(packetLabel,
-        station.lastFrame[0] != '\0' ? station.lastFrame : "Posledni TNC2 ramec neni ulozen.");
+        station.lastFrame[0] != '\0'
+            ? station.lastFrame
+            : App::Localization::text(
+                "Posledni TNC2 ramec neni ulozen.",
+                "The latest TNC2 frame is not stored."));
     lv_label_set_text(actionLabel,
-        station.hasPosition ? "OK = navigace ke stanici" : "Navigace vyzaduje paket s polohou");
+        station.hasPosition
+            ? App::Localization::text("OK = navigace ke stanici", "OK = navigate to station")
+            : App::Localization::text(
+                "Navigace vyzaduje paket s polohou",
+                "Navigation requires a packet with position"));
 }
 
 }  // namespace StationDetailScreen

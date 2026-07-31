@@ -6,6 +6,8 @@ namespace Drivers {
 namespace Display {
 
 bool begin();
+bool setBacklightPercent(std::uint8_t percent);
+std::uint8_t backlightPercent();
 void drawRgb565Bitmap(
     std::int16_t x,
     std::int16_t y,

@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "app_config.h"
+#include "app/localization.h"
 #include "app_log.h"
 #include "drivers/sd_card_driver.h"
 #include "services/geo_utils.h"
@@ -14,7 +15,6 @@ namespace Services {
 namespace {
 
 constexpr char LOG_DIRECTORY[] = "/STOPAR";
-constexpr char HEADER_LINE_1[] = "# LoRa APRS Terminal - Stopar\n";
 constexpr char HEADER_LINE_2[] =
     "# UTC;latitude;longitude;altitude_m;speed_kmh;course_deg;satellites;hdop;state\n";
 
@@ -22,16 +22,17 @@ constexpr char HEADER_LINE_2[] =
 
 bool TrailService::begin() {
     view_ = ViewState{};
+    localizationRevision_ = App::Localization::revision();
     view_.sdMounted = Drivers::SdCard::status().mounted;
     resetSessionRuntime();
     if (view_.sdMounted) {
         if (!SD.exists(LOG_DIRECTORY) && !SD.mkdir(LOG_DIRECTORY)) {
-            setError("Nelze vytvorit slozku /STOPAR na SD karte.");
+            setError(App::Localization::text("Nelze vytvorit slozku /STOPAR na SD karte.", "Cannot create /STOPAR folder on the SD card."));
             return false;
         }
         refreshLogs();
     } else {
-        setState(State::WaitingForSd, "SD karta neni dostupna.");
+        setState(State::WaitingForSd, App::Localization::text("SD karta neni dostupna.", "SD card is unavailable."));
     }
     return view_.sdMounted;
 }
@@ -40,6 +41,16 @@ void TrailService::update(
     std::uint32_t now,
     bool configuredEnabled,
     const GpsService::ViewState& gps) {
+
+    const std::uint32_t currentLocalizationRevision = App::Localization::revision();
+    if (localizationRevision_ != currentLocalizationRevision) {
+        localizationRevision_ = currentLocalizationRevision;
+        if (fatalError_) {
+            setState(
+                State::Error,
+                App::Localization::text("Chyba Stopare.", "Trail logger error."));
+        }
+    }
 
     const bool sdMounted = Drivers::SdCard::status().mounted;
     if (view_.sdMounted != sdMounted) {
@@ -54,7 +65,7 @@ void TrailService::update(
             closeSession(now, &gps);
             view_.manualPaused = false;
             view_.autoPaused = false;
-            setState(State::Disabled, "Stopar je vypnuty.");
+            setState(State::Disabled, App::Localization::text("Stopar je vypnuty.", "Trail logger is disabled."));
             return;
         }
         fatalError_ = false;
@@ -63,7 +74,7 @@ void TrailService::update(
 
     if (!configuredEnabled) {
         if (view_.state != State::Disabled) {
-            setState(State::Disabled, "Stopar je vypnuty.");
+            setState(State::Disabled, App::Localization::text("Stopar je vypnuty.", "Trail logger is disabled."));
         }
         serviceStorage(now);
         return;
@@ -71,7 +82,7 @@ void TrailService::update(
 
     if (!sdMounted) {
         closeSession(now, &gps);
-        setState(State::WaitingForSd, "Stopar ceka na SD kartu.");
+        setState(State::WaitingForSd, App::Localization::text("Stopar ceka na SD kartu.", "Trail logger is waiting for the SD card."));
         return;
     }
 
@@ -81,7 +92,7 @@ void TrailService::update(
     }
 
     if (view_.manualPaused) {
-        setState(State::ManualPaused, "Zaznam je rucne pozastaven.");
+        setState(State::ManualPaused, App::Localization::text("Zaznam je rucne pozastaven.", "Recording is paused manually."));
         serviceStorage(now);
         updateElapsed(now);
         return;
@@ -90,7 +101,7 @@ void TrailService::update(
     if (!gps.hasFix || !gps.utcDateValid || !gps.utcTimeValid) {
         setState(
             State::WaitingForGps,
-            gps.hasFix ? "Stopar ceka na platny GPS cas." : "Stopar ceka na GPS fix.");
+            gps.hasFix ? App::Localization::text("Stopar ceka na platny GPS cas.", "Trail logger is waiting for valid GPS time.") : App::Localization::text("Stopar ceka na GPS fix.", "Trail logger is waiting for a GPS fix."));
         serviceStorage(now);
         updateElapsed(now);
         return;
@@ -116,9 +127,9 @@ void TrailService::update(
             movementReferenceLongitude_ = gps.longitude;
             queueEvent("AUTO_RESUME", gps);
             queuePoint(gps, "RECORDING", now);
-            setState(State::Recording, "Pohyb obnoven, zaznam pokracuje.");
+            setState(State::Recording, App::Localization::text("Pohyb obnoven, zaznam pokracuje.", "Movement resumed; recording continues."));
         } else {
-            setState(State::AutoPaused, "Autopauza: zarizeni se nepohybuje.");
+            setState(State::AutoPaused, App::Localization::text("Autopauza: zarizeni se nepohybuje.", "Auto-pause: the device is stationary."));
         }
     } else {
         if (moving) {
@@ -130,14 +141,14 @@ void TrailService::update(
         } else if (now - stationarySince_ >= AppConfig::TRAIL_AUTOPAUSE_DELAY_MS) {
             view_.autoPaused = true;
             queueEvent("AUTO_PAUSE", gps);
-            setState(State::AutoPaused, "Autopauza: zarizeni se nepohybuje.");
+            setState(State::AutoPaused, App::Localization::text("Autopauza: zarizeni se nepohybuje.", "Auto-pause: the device is stationary."));
         }
 
         if (!view_.autoPaused && shouldRecordPoint(gps, now, false)) {
             queuePoint(gps, "RECORDING", now);
         }
         if (!view_.autoPaused) {
-            setState(State::Recording, "Trasa se zaznamenava na SD kartu.");
+            setState(State::Recording, App::Localization::text("Trasa se zaznamenava na SD kartu.", "Track is being recorded to the SD card."));
         }
     }
 
@@ -152,11 +163,11 @@ bool TrailService::toggleManualPause(
     std::size_t errorTextCapacity) {
 
     if (!view_.configuredEnabled) {
-        copyError(errorText, errorTextCapacity, "Nejprve zapnete Stopare na strance Tracker.");
+        copyError(errorText, errorTextCapacity, App::Localization::text("Nejprve zapnete Stopare na strance Tracker.", "Enable the trail logger on the Tracker page first."));
         return false;
     }
     if (!view_.sdMounted) {
-        copyError(errorText, errorTextCapacity, "SD karta neni dostupna.");
+        copyError(errorText, errorTextCapacity, App::Localization::text("SD karta neni dostupna.", "SD card is unavailable."));
         return false;
     }
     if (fatalError_) {
@@ -169,8 +180,8 @@ bool TrailService::toggleManualPause(
         if (view_.fileOpen && gps.utcDateValid && gps.utcTimeValid) {
             queueEvent("MANUAL_PAUSE", gps);
         }
-        setState(State::ManualPaused, "Zaznam je rucne pozastaven.");
-        copyError(errorText, errorTextCapacity, "Zaznam byl rucne pozastaven.");
+        setState(State::ManualPaused, App::Localization::text("Zaznam je rucne pozastaven.", "Recording is paused manually."));
+        copyError(errorText, errorTextCapacity, App::Localization::text("Zaznam byl rucne pozastaven.", "Recording was paused manually."));
     } else {
         view_.autoPaused = false;
         stationarySince_ = 0;
@@ -182,9 +193,9 @@ bool TrailService::toggleManualPause(
         }
         setState(
             gps.hasFix ? State::Recording : State::WaitingForGps,
-            gps.hasFix ? "Rucni pauza ukoncena, zaznam pokracuje."
-                       : "Rucni pauza ukoncena, ceka se na GPS fix.");
-        copyError(errorText, errorTextCapacity, "Zaznam byl znovu spusten.");
+            gps.hasFix ? App::Localization::text("Rucni pauza ukoncena, zaznam pokracuje.", "Manual pause ended; recording continues.")
+                       : App::Localization::text("Rucni pauza ukoncena, ceka se na GPS fix.", "Manual pause ended; waiting for a GPS fix."));
+        copyError(errorText, errorTextCapacity, App::Localization::text("Zaznam byl znovu spusten.", "Recording was resumed."));
     }
     ++view_.revision;
     return true;
@@ -201,7 +212,7 @@ void TrailService::refreshLogs() {
     std::uint8_t count = 0;
     File directory = SD.open(LOG_DIRECTORY);
     if (!directory || !directory.isDirectory()) {
-        setError("Nelze otevrit slozku /STOPAR.");
+        setError(App::Localization::text("Nelze otevrit slozku /STOPAR.", "Cannot open the /STOPAR folder."));
         return;
     }
 
@@ -256,7 +267,7 @@ bool TrailService::openSession(
     std::uint32_t now) {
 
     if (!SD.exists(LOG_DIRECTORY) && !SD.mkdir(LOG_DIRECTORY)) {
-        setError("Nelze vytvorit slozku /STOPAR.");
+        setError(App::Localization::text("Nelze vytvorit slozku /STOPAR.", "Cannot create the /STOPAR folder."));
         return false;
     }
 
@@ -288,22 +299,25 @@ bool TrailService::openSession(
             break;
         }
         if (suffix == 99U) {
-            setError("Nelze vytvorit jedinecny nazev logu.");
+            setError(App::Localization::text("Nelze vytvorit jedinecny nazev logu.", "Cannot create a unique log filename."));
             return false;
         }
     }
 
     file_ = SD.open(activePath_, FILE_WRITE);
     if (!file_) {
-        setError("Nelze otevrit novy TXT log na SD karte.");
+        setError(App::Localization::text("Nelze otevrit novy TXT log na SD karte.", "Cannot open a new TXT log on the SD card."));
         return false;
     }
 
-    const std::size_t h1 = file_.print(HEADER_LINE_1);
+    const char* headerLine1 = App::Localization::text(
+        "# LoRa APRS Terminal - Stopar\n",
+        "# LoRa APRS Terminal - Trail logger\n");
+    const std::size_t h1 = file_.print(headerLine1);
     const std::size_t h2 = file_.print(HEADER_LINE_2);
-    if (h1 != std::strlen(HEADER_LINE_1) || h2 != std::strlen(HEADER_LINE_2)) {
+    if (h1 != std::strlen(headerLine1) || h2 != std::strlen(HEADER_LINE_2)) {
         file_.close();
-        setError("Zapis hlavicky logu na SD selhal.");
+        setError(App::Localization::text("Zapis hlavicky logu na SD selhal.", "Writing the log header to the SD card failed."));
         return false;
     }
     file_.flush();
@@ -315,7 +329,7 @@ bool TrailService::openSession(
     std::snprintf(view_.activeFile, sizeof(view_.activeFile), "%s", baseName(activePath_));
     queueEvent("START", gps);
     queuePoint(gps, "RECORDING", now);
-    setState(State::Recording, "Novy zaznam trasy byl spusten.");
+    setState(State::Recording, App::Localization::text("Novy zaznam trasy byl spusten.", "A new track recording was started."));
     refreshLogs();
     LOG_I("TRAIL", "Recording started: %s", activePath_);
     return true;
@@ -359,7 +373,7 @@ void TrailService::setState(State state, const char* text) {
 
 void TrailService::setError(const char* text) {
     fatalError_ = true;
-    setState(State::Error, text != nullptr ? text : "Chyba Stopare.");
+    setState(State::Error, text != nullptr ? text : App::Localization::text("Chyba Stopare.", "Trail logger error."));
     LOG_E("TRAIL", "%s", view_.statusText);
 }
 
@@ -496,7 +510,7 @@ void TrailService::serviceStorage(std::uint32_t now) {
             reinterpret_cast<const std::uint8_t*>(line),
             length);
         if (written != length) {
-            setError("Zapis trasy na SD kartu selhal.");
+            setError(App::Localization::text("Zapis trasy na SD kartu selhal.", "Writing the track to the SD card failed."));
             file_.close();
             view_.fileOpen = false;
             return;

@@ -2,6 +2,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <string>
+class String {
+public:
+    String() = default;
+    explicit String(const char* value) : value_(value != nullptr ? value : "") {}
+    const char* c_str() const { return value_.c_str(); }
+private:
+    std::string value_;
+};
+
 constexpr int HIGH = 1;
 constexpr int LOW = 0;
 constexpr int OUTPUT = 1;

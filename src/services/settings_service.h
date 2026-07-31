@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "app/app_types.h"
+#include "lora_profile.h"
 
 namespace Services {
 
@@ -36,6 +37,15 @@ public:
         std::uint16_t aprsIsPort = 14580;
         std::int32_t aprsIsPasscode = -1;
         char aprsIsFilter[APRS_IS_FILTER_CAPACITY] = {};
+        std::uint8_t batteryBrightnessPercent = 70;
+        std::uint16_t displayTimeoutSeconds = 60;
+        App::UiLanguage uiLanguage = App::UiLanguage::Czech;
+        App::LoRaPreset loraPreset = App::LoRaPreset::CzeAprs;
+        float loraFrequencyMHz = LoRaProfile::FREQUENCY_MHZ;
+        float loraBandwidthKHz = LoRaProfile::BANDWIDTH_KHZ;
+        std::uint8_t loraSpreadingFactor = LoRaProfile::SPREADING_FACTOR;
+        std::uint8_t loraCodingRate = LoRaProfile::CODING_RATE;
+        std::int8_t loraOutputPowerDbm = LoRaProfile::OUTPUT_POWER_DBM;
         std::uint32_t revision = 0;
         bool persistentStorageReady = false;
     };
@@ -45,6 +55,15 @@ public:
         const char* callsign,
         double latitude,
         double longitude,
+        std::uint8_t batteryBrightnessPercent,
+        std::uint16_t displayTimeoutSeconds,
+        App::UiLanguage uiLanguage,
+        App::LoRaPreset loraPreset,
+        float loraFrequencyMHz,
+        float loraBandwidthKHz,
+        std::uint8_t loraSpreadingFactor,
+        std::uint8_t loraCodingRate,
+        std::int8_t loraOutputPowerDbm,
         char* errorText,
         std::size_t errorTextCapacity);
     bool saveTracker(

@@ -24,6 +24,7 @@ constexpr int I2C_SDA = 21;
 constexpr int I2C_SCL = 22;
 constexpr std::uint8_t TCA9554_ADDRESS = 0x20;
 constexpr std::uint8_t TOUCH_ADDRESS = 0x38;
+constexpr std::uint8_t RTC_ADDRESS = 0x51;
 constexpr int PMU_IRQ = 35;  // AXP2101 interrupt output (input-only GPIO).
 constexpr std::uint8_t TCA_RESET_OUTPUT_0 = 0;
 constexpr std::uint8_t TCA_RESET_OUTPUT_1 = 1;

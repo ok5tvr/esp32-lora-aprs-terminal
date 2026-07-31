@@ -7,6 +7,7 @@
 #include <cstring>
 #include <lvgl.h>
 
+#include "app/localization.h"
 #include "ui/ui_components.h"
 
 namespace Ui {
@@ -116,15 +117,27 @@ std::size_t areaIndex(Field field) {
 
 void refreshDraftLabels() {
     if (valueLabels[0] != nullptr) {
-        lv_label_set_text(valueLabels[0], draftDigiEnabled ? "ZAPNUT" : "VYPNUT");
+        lv_label_set_text(
+            valueLabels[0],
+            draftDigiEnabled
+                ? App::Localization::text("ZAPNUT", "ON")
+                : App::Localization::text("VYPNUT", "OFF"));
     }
     if (valueLabels[1] != nullptr) {
         char text[16] = {};
-        std::snprintf(text, sizeof(text), "%u hop", static_cast<unsigned>(draftMaxWide));
+        std::snprintf(
+            text,
+            sizeof(text),
+            App::Localization::text("%u skok", "%u hop"),
+            static_cast<unsigned>(draftMaxWide));
         lv_label_set_text(valueLabels[1], text);
     }
     if (valueLabels[2] != nullptr) {
-        lv_label_set_text(valueLabels[2], draftIgateEnabled ? "ZAPNUTA" : "VYPNUTA");
+        lv_label_set_text(
+            valueLabels[2],
+            draftIgateEnabled
+                ? App::Localization::text("ZAPNUTA", "ON")
+                : App::Localization::text("VYPNUTA", "OFF"));
     }
     if (modeDropdown != nullptr) {
         lv_dropdown_set_selected(
@@ -270,7 +283,7 @@ void createModeRow() {
     lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t* label = lv_label_create(row);
-    lv_label_set_text(label, "Rezim DIGI");
+    lv_label_set_text(label, App::Localization::text("Rezim DIGI", "DIGI mode"));
     lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(label, lv_color_hex(0xF4F7FF), 0);
     lv_obj_align(label, LV_ALIGN_LEFT_MID, 0, 0);
@@ -340,10 +353,10 @@ void openEditor(Field field) {
     lv_obj_add_flag(editorOverlay, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_move_foreground(editorOverlay);
 
-    const char* title = "Editace";
+    const char* title = App::Localization::text("Editace", "Edit");
     switch (field) {
         case Field::WifiSsid: title = "WiFi SSID"; break;
-        case Field::WifiPassword: title = "WiFi heslo"; break;
+        case Field::WifiPassword: title = App::Localization::text("WiFi heslo", "Wi-Fi password"); break;
         case Field::Server: title = "APRS-IS server"; break;
         case Field::Port: title = "APRS-IS port"; break;
         case Field::Passcode: title = "APRS-IS passcode"; break;
@@ -381,10 +394,16 @@ void openEditor(Field field) {
     lv_label_set_text(
         hint,
         field == Field::Passcode
-            ? "Pro aktivni iGate je nutny platny APRS-IS passcode; -1 je jen neovereny login."
+            ? App::Localization::text(
+                "Pro aktivni iGate je nutny platny APRS-IS passcode; -1 je jen neovereny login.",
+                "A valid APRS-IS passcode is required for an active iGate; -1 is unverified login only.")
             : (field == Field::Filter
-                ? "Zadejte pouze vyraz filtru, napr. r/49.78/13.28/50; lze ponechat prazdne."
-                : "Potvrdte tlacitkem klavesnice."));
+                ? App::Localization::text(
+                    "Zadejte pouze vyraz filtru, napr. r/49.78/13.28/50; lze ponechat prazdne.",
+                    "Enter only the filter expression, e.g. r/49.78/13.28/50; it may be empty.")
+                : App::Localization::text(
+                    "Potvrdte tlacitkem klavesnice.",
+                    "Confirm with the keyboard button.")));
     lv_obj_set_width(hint, 452);
     lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_14, 0);
@@ -509,23 +528,23 @@ void create(
     lv_obj_set_scrollbar_mode(content, LV_SCROLLBAR_MODE_AUTO);
 
     copyFromSettings(settings);
-    createToggleRow("Digipeater (RF -> RF)", "Opakuje povolene WIDE pakety", Field::DigiEnabled, 0);
+    createToggleRow("Digipeater (RF -> RF)", App::Localization::text("Opakuje povolene WIDE pakety", "Repeats allowed WIDE packets"), Field::DigiEnabled, 0);
     createModeRow();
-    createToggleRow("Max. WIDE", "Hodnoty nad limitem se neopakuji", Field::DigiMaxWide, 1);
-    createToggleRow("RX iGate (RF -> IS)", "Bez prenosu z internetu zpet na RF", Field::IgateEnabled, 2);
-    createTextRow("WiFi SSID", Field::WifiSsid, "Sit pro APRS-IS");
-    createTextRow("WiFi heslo", Field::WifiPassword, "Ulozeno v NVS");
-    createTextRow("APRS-IS server", Field::Server, "Vychozi rotate.aprs2.net");
-    createTextRow("Port", Field::Port, "Obvykle 14580");
-    createTextRow("Passcode", Field::Passcode, "Musi byt overeny");
-    createTextRow("Filter", Field::Filter, "Volitelny serverovy filter");
+    createToggleRow("Max. WIDE", App::Localization::text("Hodnoty nad limitem se neopakuji", "Values above the limit are not repeated"), Field::DigiMaxWide, 1);
+    createToggleRow("RX iGate (RF -> IS)", App::Localization::text("Bez prenosu z internetu zpet na RF", "No traffic from the internet back to RF"), Field::IgateEnabled, 2);
+    createTextRow("WiFi SSID", Field::WifiSsid, App::Localization::text("Sit pro APRS-IS", "Network for APRS-IS"));
+    createTextRow(App::Localization::text("WiFi heslo", "Wi-Fi password"), Field::WifiPassword, App::Localization::text("Ulozeno v NVS", "Stored in NVS"));
+    createTextRow("APRS-IS server", Field::Server, App::Localization::text("Vychozi rotate.aprs2.net", "Default rotate.aprs2.net"));
+    createTextRow("Port", Field::Port, App::Localization::text("Obvykle 14580", "Usually 14580"));
+    createTextRow("Passcode", Field::Passcode, App::Localization::text("Musi byt overeny", "Must be verified"));
+    createTextRow("Filter", Field::Filter, App::Localization::text("Volitelny serverovy filter", "Optional server-side filter"));
 
     lv_obj_t* saveButton = lv_btn_create(content);
     lv_obj_set_size(saveButton, 438, 40);
     lv_obj_set_style_bg_color(saveButton, lv_color_hex(0x2764D8), 0);
     lv_obj_add_event_cb(saveButton, saveClicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_t* saveLabel = lv_label_create(saveButton);
-    lv_label_set_text(saveLabel, "Ulozit a pouzit DIGI/iGate");
+    lv_label_set_text(saveLabel, App::Localization::text("Ulozit a pouzit DIGI/iGate", "Save and apply DIGI/iGate"));
     lv_obj_set_style_text_font(saveLabel, &lv_font_montserrat_16, 0);
     lv_obj_center(saveLabel);
 
@@ -534,7 +553,7 @@ void create(
     lv_label_set_long_mode(messageLabel, LV_LABEL_LONG_WRAP);
     lv_label_set_text(
         messageLabel,
-        "Sluzby jsou nezavisle: jen RX iGate = DIGI VYP / iGate ZAP; jen DIGI = DIGI ZAP / iGate VYP.");
+        App::Localization::text("Sluzby jsou nezavisle: jen RX iGate = DIGI VYP / iGate ZAP; jen DIGI = DIGI ZAP / iGate VYP.", "Services are independent: RX iGate only = DIGI OFF / iGate ON; DIGI only = DIGI ON / iGate OFF."));
     lv_obj_set_style_text_font(messageLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(messageLabel, lv_color_hex(0x92A7C7), 0);
 
@@ -600,11 +619,11 @@ void save() {
     unsigned long port = 0;
     long passcode = 0;
     if (!parseUnsigned(draftPort, 65535, port) || port == 0) {
-        setMessage("Neplatny APRS-IS port.");
+        setMessage(App::Localization::text("Neplatny APRS-IS port.", "Invalid APRS-IS port."));
         return;
     }
     if (!parseSigned(draftPasscode, -1, 32767, passcode)) {
-        setMessage("Neplatny APRS-IS passcode.");
+        setMessage(App::Localization::text("Neplatny APRS-IS passcode.", "Invalid APRS-IS passcode."));
         return;
     }
 
@@ -623,7 +642,7 @@ void save() {
         error,
         sizeof(error),
         currentSaveContext);
-    setMessage(saved ? "Nastaveni ulozeno; sluzby byly aktualizovany." : error);
+    setMessage(saved ? App::Localization::text("Nastaveni ulozeno; sluzby byly aktualizovany.", "Settings saved; services were updated.") : error);
 }
 
 void scroll(int direction) {
@@ -640,7 +659,9 @@ void setMessage(const char* text) {
     lv_label_set_text(messageLabel, text != nullptr ? text : "");
     lv_obj_set_style_text_color(
         messageLabel,
-        text != nullptr && std::strstr(text, "ulozeno") != nullptr
+        text != nullptr &&
+        (std::strstr(text, "ulozeno") != nullptr ||
+         std::strstr(text, "saved") != nullptr)
             ? lv_color_hex(0x42D392)
             : lv_color_hex(0xFFB454),
         0);

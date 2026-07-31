@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <lvgl.h>
 
+#include "app/localization.h"
 #include "services/geo_utils.h"
 #include "ui/ui_components.h"
 
@@ -20,7 +21,7 @@ lv_obj_t* coordinatesLabel = nullptr;
 
 void create() {
     resetScreen();
-    createHeader("Navigace k APRS stanici");
+    createHeader(App::Localization::text("Navigace k APRS stanici", "Navigate to APRS station"));
 
     targetLabel = lv_label_create(lv_scr_act());
     lv_obj_set_width(targetLabel, 440);
@@ -74,11 +75,11 @@ void update(
     lv_label_set_text(targetLabel, target);
 
     if (!station.hasPosition || !reference.valid) {
-        lv_label_set_text(bearingLabel, "SMER --");
-        lv_label_set_text(distanceLabel, "Vzdalenost --");
+        lv_label_set_text(bearingLabel, App::Localization::text("SMER --", "BEARING --"));
+        lv_label_set_text(distanceLabel, App::Localization::text("Vzdalenost --", "Distance --"));
         lv_label_set_text(statusLabel, !station.hasPosition
-            ? "Cil nema platnou polohu."
-            : "Neni dostupna referencni poloha terminalu.");
+            ? App::Localization::text("Cil nema platnou polohu.", "The target has no valid position.")
+            : App::Localization::text("Neni dostupna referencni poloha terminalu.", "The terminal reference position is unavailable."));
         lv_label_set_text(coordinatesLabel, "--");
         return;
     }
@@ -86,9 +87,9 @@ void update(
     const Services::DistanceBearing relative = Services::calculateDistanceBearing(
         reference.latitude, reference.longitude, station.latitude, station.longitude);
     if (!relative.valid) {
-        lv_label_set_text(bearingLabel, "SMER --");
-        lv_label_set_text(distanceLabel, "Vzdalenost --");
-        lv_label_set_text(statusLabel, "Vypocet navigace selhal.");
+        lv_label_set_text(bearingLabel, App::Localization::text("SMER --", "BEARING --"));
+        lv_label_set_text(distanceLabel, App::Localization::text("Vzdalenost --", "Distance --"));
+        lv_label_set_text(statusLabel, App::Localization::text("Vypocet navigace selhal.", "Navigation calculation failed."));
         return;
     }
 
@@ -106,12 +107,12 @@ void update(
     const std::uint32_t ageSeconds = (now - station.lastHeardMs) / 1000U;
     lv_label_set_text_fmt(
         statusLabel,
-        "Reference: %s | pozice cile stara %lu s\nSmer je zemepisny azimut, nikoli kompasovy kurz pristroje.",
-        reference.fromGps ? "aktualni GPS" : "vychozi poloha",
+        App::Localization::text("Reference: %s | pozice cile stara %lu s\nSmer je zemepisny azimut, nikoli kompasovy kurz pristroje.", "Reference: %s | target position age %lu s\nBearing is geographic azimuth, not the device compass heading."),
+        reference.fromGps ? App::Localization::text("aktualni GPS", "current GPS") : App::Localization::text("vychozi poloha", "default position"),
         static_cast<unsigned long>(ageSeconds));
     lv_label_set_text_fmt(
         coordinatesLabel,
-        "Cil %.5f, %.5f | terminal %.5f, %.5f",
+        App::Localization::text("Cil %.5f, %.5f | terminal %.5f, %.5f", "Target %.5f, %.5f | terminal %.5f, %.5f"),
         station.latitude,
         station.longitude,
         reference.latitude,

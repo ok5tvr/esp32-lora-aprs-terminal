@@ -12,6 +12,7 @@ enum class ScreenId : std::uint8_t {
     Diagnostics,
     Messages,
     GpsStatus,
+    Astronomy,
     Map,
     Stations,
     StationDetail,
@@ -62,6 +63,16 @@ enum class DigiMode : std::uint8_t {
     FillInAndWide2 = 2
 };
 
+enum class LoRaPreset : std::uint8_t {
+    CzeAprs = 0,
+    Custom = 1
+};
+
+enum class UiLanguage : std::uint8_t {
+    Czech = 0,
+    English = 1
+};
+
 enum class TrackerSymbol : std::uint8_t {
     Car = 0,
     Person,
@@ -78,6 +89,7 @@ enum class TrackerSymbol : std::uint8_t {
 };
 
 using CommandHandler = void (*)(Command command, void* context);
+using MapPanHandler = void (*)(std::int16_t deltaX, std::int16_t deltaY, void* context);
 using MessageSendHandler = bool (*)(
     const char* recipient,
     const char* text,
@@ -88,6 +100,15 @@ using SettingsSaveHandler = bool (*)(
     const char* callsign,
     double latitude,
     double longitude,
+    std::uint8_t batteryBrightnessPercent,
+    std::uint16_t displayTimeoutSeconds,
+    UiLanguage uiLanguage,
+    LoRaPreset loraPreset,
+    float loraFrequencyMHz,
+    float loraBandwidthKHz,
+    std::uint8_t loraSpreadingFactor,
+    std::uint8_t loraCodingRate,
+    std::int8_t loraOutputPowerDbm,
     char* errorText,
     std::size_t errorTextCapacity,
     void* context);

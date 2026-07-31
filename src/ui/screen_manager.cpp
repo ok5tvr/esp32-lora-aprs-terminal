@@ -4,7 +4,9 @@
 #include <cstring>
 
 #include "app/menu_model.h"
+#include "app/localization.h"
 #include "app_config.h"
+#include "ui/screens/astronomy_screen.h"
 #include "ui/screens/diagnostics_screen.h"
 #include "ui/screens/digi_igate_screen.h"
 #include "ui/screens/gps_screen.h"
@@ -76,7 +78,9 @@ void ScreenManager::begin(
     App::DigiIgateSettingsSaveHandler digiIgateSaveHandler,
     void* digiIgateSaveContext,
     App::TrackerSettingsSaveHandler trackerSaveHandler,
-    void* trackerSaveContext) {
+    void* trackerSaveContext,
+    App::MapPanHandler mapPanHandler,
+    void* mapPanContext) {
 
     commandHandler_ = commandHandler;
     commandContext_ = commandContext;
@@ -88,10 +92,12 @@ void ScreenManager::begin(
     digiIgateSaveContext_ = digiIgateSaveContext;
     trackerSaveHandler_ = trackerSaveHandler;
     trackerSaveContext_ = trackerSaveContext;
+    MapScreen::setPanHandler(mapPanHandler, mapPanContext);
     observedMessageEvents_ = 0;
     observedStationEvents_ = 0;
     unreadMessageCount_ = 0;
     newStationCount_ = 0;
+    renderedLanguage_ = App::Localization::language();
     Styles::begin();
     currentScreen_ = App::ScreenId::Splash;
     SplashScreen::create();
@@ -107,6 +113,8 @@ void ScreenManager::update(
     const Services::TrackerService::ViewState& trackerState,
     const Services::TrailService::ViewState& trailState,
     const Services::PowerService::ViewState& powerState,
+    const Services::TimeService::ViewState& timeState,
+    const Services::AstronomyService::ViewState& astronomyState,
     const Services::DigiIgateService::ViewState& digiIgateState,
     const Services::PositionReference& reference,
     const Services::MapService::ViewState& mapState,
@@ -129,9 +137,18 @@ void ScreenManager::update(
     trackerState_ = trackerState;
     trailState_ = trailState;
     powerState_ = powerState;
+    timeState_ = timeState;
+    astronomyState_ = astronomyState;
     digiIgateState_ = digiIgateState;
     referenceState_ = reference;
     mapState_ = &mapState;
+
+    const bool languageChanged = renderedLanguage_ != settingsState.uiLanguage;
+    if (languageChanged) {
+        renderedLanguage_ = settingsState.uiLanguage;
+        App::Localization::setLanguage(renderedLanguage_);
+        show(currentScreen_);
+    }
 
     const std::uint32_t messageDelta =
         messageState.receivedMessageEvents - observedMessageEvents_;
@@ -176,6 +193,7 @@ void ScreenManager::update(
     }
     lastRefreshAt_ = now;
     updateHeaderPower(powerState);
+    updateHeaderTime(timeState);
 
     if (currentScreen_ == App::ScreenId::MainMenu) {
         MenuScreen::update(
@@ -195,6 +213,8 @@ void ScreenManager::update(
         MessagesScreen::update(messageState);
     } else if (currentScreen_ == App::ScreenId::GpsStatus) {
         GpsScreen::update(gpsState);
+    } else if (currentScreen_ == App::ScreenId::Astronomy) {
+        AstronomyScreen::update(astronomyState, timeState);
     } else if (currentScreen_ == App::ScreenId::Map) {
         MapScreen::update(mapState, stationState, trailState, reference);
     } else if (currentScreen_ == App::ScreenId::Stations) {
@@ -451,6 +471,9 @@ void ScreenManager::show(App::ScreenId screen) {
     } else if (screen == App::ScreenId::GpsStatus) {
         GpsScreen::create();
         GpsScreen::update(gpsState_);
+    } else if (screen == App::ScreenId::Astronomy) {
+        AstronomyScreen::create();
+        AstronomyScreen::update(astronomyState_, timeState_);
     } else if (screen == App::ScreenId::Map) {
         MapScreen::create();
         if (mapState_ != nullptr && stationState_ != nullptr) {
@@ -502,6 +525,7 @@ void ScreenManager::show(App::ScreenId screen) {
     }
     rebuildNavigationBar();
     updateHeaderPower(powerState_);
+    updateHeaderTime(timeState_);
 }
 
 void ScreenManager::showMainMenu() {

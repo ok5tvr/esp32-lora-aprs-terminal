@@ -4,6 +4,7 @@
 #include <lvgl.h>
 
 #include "app_config.h"
+#include "app/localization.h"
 #include "ui/ui_components.h"
 
 namespace Ui {
@@ -28,7 +29,9 @@ void create() {
     lv_obj_align(subtitle, LV_ALIGN_CENTER, 0, -5);
 
     lv_obj_t* author = lv_label_create(lv_scr_act());
-    lv_label_set_text(author, "Vytvoril: OK5TVR");
+    lv_label_set_text(
+        author,
+        App::Localization::text("Vytvoril: OK5TVR", "Created by: OK5TVR"));
     lv_obj_set_style_text_font(author, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(author, lv_color_hex(0x92A7C7), 0);
     lv_obj_align(author, LV_ALIGN_CENTER, 0, 28);

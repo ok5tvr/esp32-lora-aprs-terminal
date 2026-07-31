@@ -13,6 +13,8 @@ namespace {
 NavigationHandler currentHandler = nullptr;
 void* currentContext = nullptr;
 lv_obj_t* headerPowerLabel = nullptr;
+lv_obj_t* headerTitleLabel = nullptr;
+bool clockHeaderActive = false;
 
 void formatVoltageCz(char* output, std::size_t capacity, std::uint16_t millivolts) {
     if (output == nullptr || capacity == 0U) {
@@ -59,6 +61,8 @@ void resetScreen() {
     lv_obj_t* screen = lv_scr_act();
     lv_obj_clean(screen);
     headerPowerLabel = nullptr;
+    headerTitleLabel = nullptr;
+    clockHeaderActive = false;
     lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(screen, lv_color_hex(0x0B1424), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
@@ -75,11 +79,11 @@ void createHeader(const char* title) {
     lv_obj_set_style_border_color(header, lv_color_hex(0x263A59), 0);
     lv_obj_set_style_border_width(header, 1, 0);
 
-    lv_obj_t* label = lv_label_create(header);
-    lv_label_set_text(label, title);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_22, 0);
-    lv_obj_set_style_text_color(label, lv_color_hex(0xF4F7FF), 0);
-    lv_obj_align(label, LV_ALIGN_LEFT_MID, 14, 0);
+    headerTitleLabel = lv_label_create(header);
+    lv_label_set_text(headerTitleLabel, title);
+    lv_obj_set_style_text_font(headerTitleLabel, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_color(headerTitleLabel, lv_color_hex(0xF4F7FF), 0);
+    lv_obj_align(headerTitleLabel, LV_ALIGN_LEFT_MID, 14, 0);
 
     headerPowerLabel = lv_label_create(header);
     lv_obj_set_width(headerPowerLabel, 148);
@@ -89,6 +93,35 @@ void createHeader(const char* title) {
     lv_obj_set_style_text_color(headerPowerLabel, lv_color_hex(0x92A7C7), 0);
     lv_obj_align(headerPowerLabel, LV_ALIGN_RIGHT_MID, -12, 0);
     lv_label_set_text(headerPowerLabel, "PWR --");
+}
+
+void createClockHeader() {
+    createHeader("--:--");
+    clockHeaderActive = true;
+}
+
+void updateHeaderTime(const Services::TimeService::ViewState& state) {
+    if (!clockHeaderActive || headerTitleLabel == nullptr) {
+        return;
+    }
+
+    if (!state.valid) {
+        lv_label_set_text(headerTitleLabel, "--:--");
+        lv_obj_set_style_text_color(headerTitleLabel, lv_color_hex(0x46566E), 0);
+        return;
+    }
+
+    lv_label_set_text_fmt(
+        headerTitleLabel,
+        "%02u:%02u",
+        static_cast<unsigned>(state.localHour),
+        static_cast<unsigned>(state.localMinute));
+    lv_obj_set_style_text_color(
+        headerTitleLabel,
+        state.source == Services::TimeService::Source::Gps
+            ? lv_color_hex(0x42D392)
+            : lv_color_hex(0xF4F7FF),
+        0);
 }
 
 void updateHeaderPower(const Services::PowerService::ViewState& state) {

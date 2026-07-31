@@ -48,6 +48,31 @@ WorldPixel toWorldPixel(double latitude, double longitude, std::uint8_t zoom) {
     return result;
 }
 
+GeoCoordinate fromWorldPixel(double x, double y, std::uint8_t zoom) {
+    GeoCoordinate result;
+    const double size = worldSize(zoom);
+    if (!(size > 0.0) || !std::isfinite(x) || !std::isfinite(y)) {
+        return result;
+    }
+
+    x = std::fmod(x, size);
+    if (x < 0.0) {
+        x += size;
+    }
+    if (y < 0.0) {
+        y = 0.0;
+    } else if (y > size) {
+        y = size;
+    }
+
+    result.longitude = x / size * 360.0 - 180.0;
+    const double mercator = PI - 2.0 * PI * y / size;
+    result.latitude = 180.0 / PI * std::atan(std::sinh(mercator));
+    result.valid = validCoordinate(result.latitude, result.longitude) &&
+        std::fabs(result.latitude) <= MAX_MERCATOR_LATITUDE + 1e-9;
+    return result;
+}
+
 ScreenPoint projectToViewport(
     double latitude,
     double longitude,

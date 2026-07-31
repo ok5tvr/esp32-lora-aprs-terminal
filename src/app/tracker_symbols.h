@@ -29,7 +29,7 @@ inline constexpr TrackerSymbolDefinition TRACKER_SYMBOL_DEFINITIONS[] = {
 };
 
 
-inline constexpr char TRACKER_SYMBOL_DROPDOWN_OPTIONS[] =
+inline constexpr char TRACKER_SYMBOL_DROPDOWN_OPTIONS_CZ[] =
     "Auto />\n"
     "Chodec /[\n"
     "Jizdni kolo /b\n"
@@ -41,6 +41,25 @@ inline constexpr char TRACKER_SYMBOL_DROPDOWN_OPTIONS[] =
     "Meteostanice /_\n"
     "Obecny bod //\n"
     "LoRa iGate L&";
+
+inline constexpr char TRACKER_SYMBOL_DROPDOWN_OPTIONS_EN[] =
+    "Car />\n"
+    "Person /[\n"
+    "Bicycle /b\n"
+    "Motorcycle /<\n"
+    "QTH / house /-\n"
+    "Boat /s\n"
+    "Aircraft /^\n"
+    "Balloon /O\n"
+    "Weather station /_\n"
+    "Generic point //\n"
+    "LoRa iGate L&";
+
+inline constexpr const char* trackerSymbolDropdownOptions(UiLanguage language) {
+    return language == UiLanguage::English
+        ? TRACKER_SYMBOL_DROPDOWN_OPTIONS_EN
+        : TRACKER_SYMBOL_DROPDOWN_OPTIONS_CZ;
+}
 
 static_assert(
     sizeof(TRACKER_SYMBOL_DEFINITIONS) / sizeof(TRACKER_SYMBOL_DEFINITIONS[0]) ==

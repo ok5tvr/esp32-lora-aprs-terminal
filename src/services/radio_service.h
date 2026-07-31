@@ -7,6 +7,7 @@
 #include "drivers/sx1278_driver.h"
 #include "services/digi_igate_service.h"
 #include "services/message_store.h"
+#include "services/settings_service.h"
 #include "services/station_store.h"
 #include "services/tx_queue.h"
 #include "services/weather_store.h"
@@ -41,6 +42,13 @@ public:
         float lastRssiDbm = 0.0F;
         float lastSnrDb = 0.0F;
         float lastFrequencyErrorHz = 0.0F;
+        App::LoRaPreset loraPreset = App::LoRaPreset::CzeAprs;
+        float loraFrequencyMHz = LoRaProfile::FREQUENCY_MHZ;
+        float loraBandwidthKHz = LoRaProfile::BANDWIDTH_KHZ;
+        std::uint8_t loraSpreadingFactor = LoRaProfile::SPREADING_FACTOR;
+        std::uint8_t loraCodingRate = LoRaProfile::CODING_RATE;
+        std::int8_t loraOutputPowerDbm = LoRaProfile::OUTPUT_POWER_DBM;
+        bool loraConfigurationPending = false;
 
         // Periodic background/channel RSSI monitoring. Each stored point is
         // an average of a short burst; peak history records the strongest
@@ -60,11 +68,12 @@ public:
         float noisePeakHistoryDbm[AppConfig::RADIO_NOISE_HISTORY_LENGTH] = {};
 
         char lastTxSource[16] = "--";
-        char lastRecoveryText[64] = "Zatim nebyla potreba";
-        char lastPacketText[256] = "Cekam na prvni paket...";
+        char lastRecoveryText[64] = "--";
+        char lastPacketText[256] = "--";
     };
 
-    bool begin();
+    bool begin(const SettingsService::ViewState& settings);
+    void requestConfiguration(const SettingsService::ViewState& settings);
     void update(
         std::uint32_t now,
         const SettingsService::ViewState& settings);
@@ -84,6 +93,25 @@ public:
     const DigiIgateService::ViewState& digiIgateViewState() const;
 
 private:
+    enum class NoticeKind : std::uint8_t {
+        NotNeeded,
+        ConfigurationWaiting,
+        ConfigurationApplied,
+        ConfigurationFailed,
+        RecoverySucceeded,
+        RecoveryFailed
+    };
+
+    enum class RecoveryReason : std::uint8_t {
+        None,
+        RadioOffline,
+        ErrorState,
+        RepeatedReceiveError,
+        TransmitTimeout
+    };
+
+    void refreshLocalizedNotice();
+    const char* recoveryReasonText() const;
     void refreshDriverStatus();
     void observeDriverEvents(std::uint32_t now);
     void refreshQueueStatus();
@@ -91,6 +119,8 @@ private:
     void serviceDigiQueue(std::uint32_t now);
     void serviceTxQueue(std::uint32_t now);
     void serviceRecovery(std::uint32_t now);
+    void servicePendingConfiguration(std::uint32_t now);
+    void updateConfigurationView();
     void serviceNoiseMonitor(std::uint32_t now);
     void appendNoiseMeasurement(float averageDbm, float peakDbm, std::uint32_t now);
     void cancelNoiseBurst(std::uint32_t now);
@@ -124,6 +154,13 @@ private:
     float noiseBurstPeakDbm_ = -170.0F;
     std::uint8_t noiseBurstSamples_ = 0;
     bool noiseBurstActive_ = false;
+    LoRaProfile::Config desiredConfig_ = LoRaProfile::czeAprsConfig();
+    App::LoRaPreset desiredPreset_ = App::LoRaPreset::CzeAprs;
+    bool configurationPending_ = false;
+    std::uint32_t localizationRevision_ = 0;
+    NoticeKind noticeKind_ = NoticeKind::NotNeeded;
+    RecoveryReason recoveryReason_ = RecoveryReason::None;
+    std::int16_t noticeError_ = 0;
 };
 
 }  // namespace Services

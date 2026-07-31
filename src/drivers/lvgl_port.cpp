@@ -20,6 +20,9 @@ lv_disp_draw_buf_t drawBuffer;
 lv_disp_drv_t displayDriver;
 lv_indev_drv_t inputDriver;
 std::uint32_t lastTick = 0;
+bool touchWakeOnly = false;
+bool blockTouchUntilRelease = false;
+bool touchActivityPending = false;
 
 void flush(lv_disp_drv_t* driver, const lv_area_t* area, lv_color_t* pixels) {
     const std::uint16_t width = static_cast<std::uint16_t>(area->x2 - area->x1 + 1);
@@ -37,7 +40,30 @@ void flush(lv_disp_drv_t* driver, const lv_area_t* area, lv_color_t* pixels) {
 void readTouch(lv_indev_drv_t*, lv_indev_data_t* data) {
     std::int16_t x = 0;
     std::int16_t y = 0;
-    if (!Touch::readPoint(x, y)) {
+    const bool touched = Touch::readPoint(x, y);
+    if (touched) {
+        touchActivityPending = true;
+    }
+
+    if (touchWakeOnly) {
+        if (touched) {
+            blockTouchUntilRelease = true;
+        }
+        data->state = LV_INDEV_STATE_REL;
+        return;
+    }
+
+    // The touch that woke the backlight is consumed. LVGL remains released
+    // until the user lifts the finger, preventing an accidental button press.
+    if (blockTouchUntilRelease) {
+        if (!touched) {
+            blockTouchUntilRelease = false;
+        }
+        data->state = LV_INDEV_STATE_REL;
+        return;
+    }
+
+    if (!touched) {
         data->state = LV_INDEV_STATE_REL;
         return;
     }
@@ -118,6 +144,16 @@ void update() {
         lastTick = now;
     }
     lv_timer_handler();
+}
+
+void setTouchWakeOnly(bool enabled) {
+    touchWakeOnly = enabled;
+}
+
+bool consumeTouchActivity() {
+    const bool pending = touchActivityPending;
+    touchActivityPending = false;
+    return pending;
 }
 
 }  // namespace LvglPort

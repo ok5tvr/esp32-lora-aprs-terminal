@@ -4,6 +4,7 @@
 #include <cstring>
 #include <lvgl.h>
 
+#include "app/localization.h"
 #include "ui/ui_components.h"
 
 namespace Ui {
@@ -95,7 +96,7 @@ void create(
     renderedRevision = 0xFFFFFFFFU;
 
     resetScreen();
-    createHeader("Stopar");
+    createHeader(App::Localization::text("Stopar", "Trail logger"));
 
     statusLabel = lv_label_create(lv_scr_act());
     lv_obj_set_width(statusLabel, 292);
@@ -127,7 +128,7 @@ void create(
     lv_obj_align(metricsLabel, LV_ALIGN_TOP_LEFT, 14, 108);
 
     lv_obj_t* logsTitle = lv_label_create(lv_scr_act());
-    lv_label_set_text(logsTitle, "Ulozene TXT logy");
+    lv_label_set_text(logsTitle, App::Localization::text("Ulozene TXT logy", "Saved TXT logs"));
     lv_obj_set_style_text_font(logsTitle, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(logsTitle, lv_color_hex(0x92A7C7), 0);
     lv_obj_align(logsTitle, LV_ALIGN_TOP_LEFT, 14, 133);
@@ -167,7 +168,7 @@ void update(const Services::TrailService::ViewState& state) {
     std::snprintf(
         fileText,
         sizeof(fileText),
-        "Soubor: %s",
+        App::Localization::text("Soubor: %s", "File: %s"),
         state.fileOpen && state.activeFile[0] != '\0' ? state.activeFile : "--");
     lv_label_set_text(fileLabel, fileText);
 
@@ -178,7 +179,7 @@ void update(const Services::TrailService::ViewState& state) {
     std::snprintf(
         metrics,
         sizeof(metrics),
-        "Body %u | Trasa %.2f km | Cas %02u:%02u:%02u | Ztraceno %u",
+        App::Localization::text("Body %u | Trasa %.2f km | Cas %02u:%02u:%02u | Ztraceno %u", "Points %u | Track %.2f km | Time %02u:%02u:%02u | Dropped %u"),
         static_cast<unsigned>(state.pointsWritten),
         state.distanceKm,
         static_cast<unsigned>(hours),
@@ -187,11 +188,11 @@ void update(const Services::TrailService::ViewState& state) {
         static_cast<unsigned>(state.droppedLines));
     lv_label_set_text(metricsLabel, metrics);
 
-    const char* buttonText = "Pozastavit";
+    const char* buttonText = App::Localization::text("Pozastavit", "Pause");
     if (!state.configuredEnabled) {
-        buttonText = "Zapnout v Trackeru";
+        buttonText = App::Localization::text("Zapnout v Trackeru", "Enable in Tracker");
     } else if (state.manualPaused) {
-        buttonText = "Pokracovat";
+        buttonText = App::Localization::text("Pokracovat", "Resume");
     }
     lv_label_set_text(pauseButtonLabel, buttonText);
     if (state.configuredEnabled) {
@@ -209,7 +210,15 @@ void update(const Services::TrailService::ViewState& state) {
 
     if (state.logCount == 0U) {
         lv_obj_t* empty = lv_label_create(logsList);
-        lv_label_set_text(empty, state.sdMounted ? "Na SD karte zatim nejsou zadne logy." : "SD karta neni dostupna.");
+        lv_label_set_text(
+            empty,
+            state.sdMounted
+                ? App::Localization::text(
+                    "Na SD karte zatim nejsou zadne logy.",
+                    "There are no logs on the SD card yet.")
+                : App::Localization::text(
+                    "SD karta neni dostupna.",
+                    "The SD card is unavailable."));
         lv_obj_set_width(empty, 420);
         lv_label_set_long_mode(empty, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_font(empty, &lv_font_montserrat_14, 0);
@@ -241,7 +250,10 @@ void setMessage(const char* text) {
     lv_label_set_text(statusLabel, text != nullptr ? text : "");
     lv_obj_set_style_text_color(
         statusLabel,
-        text != nullptr && std::strstr(text, "spusten") != nullptr
+        text != nullptr &&
+            (std::strstr(text, "spusten") != nullptr ||
+             std::strstr(text, "started") != nullptr ||
+             std::strstr(text, "recording") != nullptr)
             ? lv_color_hex(0x42D392)
             : lv_color_hex(0xFFB547),
         0);

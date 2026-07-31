@@ -5,6 +5,8 @@
 
 #include "app/app_types.h"
 #include "drivers/button_driver.h"
+#include "services/astronomy_service.h"
+#include "services/display_power_service.h"
 #include "services/geo_utils.h"
 #include "services/gps_service.h"
 #include "services/map_service.h"
@@ -12,6 +14,7 @@
 #include "services/radio_service.h"
 #include "services/settings_service.h"
 #include "services/trail_service.h"
+#include "services/time_service.h"
 #include "services/tracker_service.h"
 #include "ui/screen_manager.h"
 
@@ -24,6 +27,7 @@ public:
 
 private:
     static void commandThunk(Command command, void* context);
+    static void mapPanThunk(std::int16_t deltaX, std::int16_t deltaY, void* context);
     static bool messageSendThunk(
         const char* recipient,
         const char* text,
@@ -34,6 +38,15 @@ private:
         const char* callsign,
         double latitude,
         double longitude,
+        std::uint8_t batteryBrightnessPercent,
+        std::uint16_t displayTimeoutSeconds,
+        UiLanguage uiLanguage,
+        LoRaPreset loraPreset,
+        float loraFrequencyMHz,
+        float loraBandwidthKHz,
+        std::uint8_t loraSpreadingFactor,
+        std::uint8_t loraCodingRate,
+        std::int8_t loraOutputPowerDbm,
         char* errorText,
         std::size_t errorTextCapacity,
         void* context);
@@ -72,6 +85,15 @@ private:
         const char* callsign,
         double latitude,
         double longitude,
+        std::uint8_t batteryBrightnessPercent,
+        std::uint16_t displayTimeoutSeconds,
+        UiLanguage uiLanguage,
+        LoRaPreset loraPreset,
+        float loraFrequencyMHz,
+        float loraBandwidthKHz,
+        std::uint8_t loraSpreadingFactor,
+        std::uint8_t loraCodingRate,
+        std::int8_t loraOutputPowerDbm,
         char* errorText,
         std::size_t errorTextCapacity);
     bool saveDigiIgateSettings(
@@ -104,6 +126,9 @@ private:
     Services::SettingsService settings_;
     Services::GpsService gps_;
     Services::PowerService power_;
+    Services::TimeService time_;
+    Services::AstronomyService astronomy_;
+    Services::DisplayPowerService displayPower_;
     Services::RadioService radio_;
     Services::MapService map_;
     Services::TrackerService tracker_;

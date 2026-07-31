@@ -4,6 +4,7 @@
 #include <cstring>
 #include <lvgl.h>
 
+#include "app/localization.h"
 #include "ui/ui_components.h"
 
 namespace Ui {
@@ -19,13 +20,15 @@ lv_obj_t* systemLabel = nullptr;
 lv_obj_t* eventLabel = nullptr;
 std::uint32_t renderedRevision = 0xFFFFFFFFU;
 
-void formatVoltageCz(char* output, std::size_t capacity, std::uint16_t millivolts) {
+void formatVoltage(char* output, std::size_t capacity, std::uint16_t millivolts) {
     if (output == nullptr || capacity == 0U) {
         return;
     }
     std::snprintf(output, capacity, "%.2f", static_cast<double>(millivolts) / 1000.0);
-    if (char* decimal = std::strchr(output, '.')) {
-        *decimal = ',';
+    if (!App::Localization::isEnglish()) {
+        if (char* decimal = std::strchr(output, '.')) {
+            *decimal = ',';
+        }
     }
 }
 
@@ -41,7 +44,7 @@ void styleLine(lv_obj_t* label, lv_coord_t y, lv_color_t color = lv_color_hex(0x
 
 void create() {
     resetScreen();
-    createHeader("Napajeni");
+    createHeader(App::Localization::text("Napajeni", "Power"));
 
     stateLabel = lv_label_create(lv_scr_act());
     styleLine(stateLabel, 54);
@@ -75,18 +78,18 @@ void update(const Services::PowerService::ViewState& state) {
     renderedRevision = state.revision;
 
     if (!state.available) {
-        lv_label_set_text(stateLabel, "AXP2101 neni dostupny");
+        lv_label_set_text(stateLabel, App::Localization::text("AXP2101 neni dostupny", "AXP2101 is unavailable"));
         lv_obj_set_style_text_color(stateLabel, lv_color_hex(0xF05B67), 0);
-        lv_label_set_text(batteryLabel, "Akumulator: -- | nabiti: -- | napeti: --");
-        lv_label_set_text(chargerLabel, "Stav nabijeni: --");
-        lv_label_set_text(chargeSettingsLabel, "Nastaveny proud: -- | cilove napeti: --");
-        lv_label_set_text(usbLabel, "USB-C: -- | VBUS: --");
-        lv_label_set_text(systemLabel, "System: -- | teplota PMIC: --");
+        lv_label_set_text(batteryLabel, App::Localization::text("Akumulator: -- | nabiti: -- | napeti: --", "Battery: -- | charge: -- | voltage: --"));
+        lv_label_set_text(chargerLabel, App::Localization::text("Stav nabijeni: --", "Charging status: --"));
+        lv_label_set_text(chargeSettingsLabel, App::Localization::text("Nastaveny proud: -- | cilove napeti: --", "Configured current: -- | target voltage: --"));
+        lv_label_set_text(usbLabel, App::Localization::text("USB-C: -- | VBUS: --", "USB-C: -- | VBUS: --"));
+        lv_label_set_text(systemLabel, App::Localization::text("System: -- | teplota PMIC: --", "System: -- | PMIC temperature: --"));
         lv_label_set_text(eventLabel, state.lastEvent);
         return;
     }
 
-    lv_label_set_text_fmt(stateLabel, "Stav: %s", state.operatingText);
+    lv_label_set_text_fmt(stateLabel, App::Localization::text("Stav: %s", "Status: %s"), state.operatingText);
     if (state.criticalBattery) {
         lv_obj_set_style_text_color(stateLabel, lv_color_hex(0xF05B67), 0);
     } else if (state.charging) {
@@ -102,74 +105,82 @@ void update(const Services::PowerService::ViewState& state) {
     char vbusVoltage[12];
     char systemVoltage[12];
     char targetVoltage[12];
-    formatVoltageCz(batteryVoltage, sizeof(batteryVoltage), state.batteryVoltageMv);
-    formatVoltageCz(vbusVoltage, sizeof(vbusVoltage), state.vbusVoltageMv);
-    formatVoltageCz(systemVoltage, sizeof(systemVoltage), state.systemVoltageMv);
-    formatVoltageCz(targetVoltage, sizeof(targetVoltage), state.targetChargeVoltageMv);
+    formatVoltage(batteryVoltage, sizeof(batteryVoltage), state.batteryVoltageMv);
+    formatVoltage(vbusVoltage, sizeof(vbusVoltage), state.vbusVoltageMv);
+    formatVoltage(systemVoltage, sizeof(systemVoltage), state.systemVoltageMv);
+    formatVoltage(targetVoltage, sizeof(targetVoltage), state.targetChargeVoltageMv);
 
     if (state.batteryConnected) {
         if (state.batteryPercentValid) {
             std::snprintf(
                 text,
                 sizeof(text),
-                "Akumulator: pripojen | nabiti: %u %% | napeti: %s V",
+                App::Localization::text("Akumulator: pripojen | nabiti: %u %% | napeti: %s V", "Battery: connected | charge: %u %% | voltage: %s V"),
                 static_cast<unsigned>(state.batteryPercent),
                 batteryVoltage);
         } else {
             std::snprintf(
                 text,
                 sizeof(text),
-                "Akumulator: pripojen | nabiti: -- | napeti: %s V",
+                App::Localization::text("Akumulator: pripojen | nabiti: -- | napeti: %s V", "Battery: connected | charge: -- | voltage: %s V"),
                 batteryVoltage);
         }
     } else {
-        std::snprintf(text, sizeof(text), "Akumulator: nepripojen | nabiti: -- | napeti: --");
+        std::snprintf(text, sizeof(text), App::Localization::text("Akumulator: nepripojen | nabiti: -- | napeti: --", "Battery: disconnected | charge: -- | voltage: --"));
     }
     lv_label_set_text(batteryLabel, text);
 
-    std::snprintf(text, sizeof(text), "Stav nabijeni: %s", state.chargerText);
+    std::snprintf(text, sizeof(text), App::Localization::text("Stav nabijeni: %s", "Charging status: %s"), state.chargerText);
     lv_label_set_text(chargerLabel, text);
 
     if (state.configuredChargeCurrentMa > 0U && state.targetChargeVoltageMv > 0U) {
         std::snprintf(
             text,
             sizeof(text),
-            "Nastaveny proud: %u mA | cilove napeti: %s V",
+            App::Localization::text("Nastaveny proud: %u mA | cilove napeti: %s V", "Configured current: %u mA | target voltage: %s V"),
             static_cast<unsigned>(state.configuredChargeCurrentMa),
             targetVoltage);
     } else {
-        std::snprintf(text, sizeof(text), "Nastaveny proud: -- | cilove napeti: --");
+        std::snprintf(text, sizeof(text), App::Localization::text("Nastaveny proud: -- | cilove napeti: --", "Configured current: -- | target voltage: --"));
     }
     lv_label_set_text(chargeSettingsLabel, text);
 
     std::snprintf(
         text,
         sizeof(text),
-        "USB-C: %s | VBUS: %s V%s",
-        state.vbusConnected ? "pripojeno" : "nepripojeno",
+        App::Localization::text("USB-C: %s | VBUS: %s V%s", "USB-C: %s | VBUS: %s V%s"),
+        state.vbusConnected
+            ? App::Localization::text("pripojeno", "connected")
+            : App::Localization::text("nepripojeno", "disconnected"),
         vbusVoltage,
-        state.vbusConnected && !state.vbusGood ? " (nestabilni)" : "");
+        state.vbusConnected && !state.vbusGood
+            ? App::Localization::text(" (nestabilni)", " (unstable)")
+            : "");
     lv_label_set_text(usbLabel, text);
 
     if (state.pmicTemperatureValid) {
         std::snprintf(
             text,
             sizeof(text),
-            "System: %s V | teplota PMIC: %.1f C%s",
+            App::Localization::text("System: %s V | teplota PMIC: %.1f C%s", "System: %s V | PMIC temperature: %.1f C%s"),
             systemVoltage,
             static_cast<double>(state.pmicTemperatureC),
-            state.criticalBattery ? " | KRITICKA BATERIE" : "");
+            state.criticalBattery
+                ? App::Localization::text(" | KRITICKA BATERIE", " | CRITICAL BATTERY")
+                : "");
     } else {
         std::snprintf(
             text,
             sizeof(text),
-            "System: %s V | teplota PMIC: --%s",
+            App::Localization::text("System: %s V | teplota PMIC: --%s", "System: %s V | PMIC temperature: --%s"),
             systemVoltage,
-            state.criticalBattery ? " | KRITICKA BATERIE" : "");
+            state.criticalBattery
+                ? App::Localization::text(" | KRITICKA BATERIE", " | CRITICAL BATTERY")
+                : "");
     }
     lv_label_set_text(systemLabel, text);
 
-    std::snprintf(text, sizeof(text), "Posledni udalost: %s", state.lastEvent);
+    std::snprintf(text, sizeof(text), App::Localization::text("Posledni udalost: %s", "Last event: %s"), state.lastEvent);
     lv_label_set_text(eventLabel, text);
 }
 

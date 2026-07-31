@@ -112,7 +112,7 @@ keeps a fixed 20-entry history, ACK queue and retransmission schedule. ACK and
 outgoing-message frames enter the central queue with the two highest priorities,
 so reception and acknowledgement handling remain background tasks.
 
-## Offline map layer (2.0.0)
+## Offline map layer (2.1.0)
 
 `MapService` owns a 480 x 202 RGB565 framebuffer allocated preferentially in
 PSRAM. It converts the current GPS/default reference to Web Mercator world
@@ -122,6 +122,43 @@ per main-loop pass from `/MAP/<z>/<x>/<y>.rgb`. The service is active only while
 
 `MapScreen` attaches the service buffer to an LVGL canvas. APRS symbols, the
 current position and the recent Stopar polyline are separate LVGL overlay
-objects, so a new station does not require the map tiles to be read again.
-`map_projection.*` contains hardware-independent coordinate conversion and is
-covered by native host tests.
+objects, so a new station does not require the map tiles to be read again. A
+transparent fixed gesture layer captures touch dragging. During a drag the
+canvas and overlay are translated together for immediate feedback; only the
+final release delta is sent through `MapPanHandler` to `MapService`, preventing
+repeated SD access for every touch sample.
+
+`MapService` converts the drag delta to a manual world-pixel center, disables
+automatic reference following and requests one progressive rerender. OK calls
+`recenter()`, restores GPS/default following and reloads around the latest
+reference. `map_projection.*` contains both forward and inverse Web Mercator
+coordinate conversion and is covered by native host tests.
+
+## Display power and time services (2.3.0)
+
+`DisplayPowerService` separates LCD backlight policy from the radio, GPS and UI
+state machines. `PowerService` selects USB/full-brightness or battery mode,
+while `SettingsService` supplies the battery brightness and inactivity timeout.
+On battery the display remains at the selected brightness for 30 seconds, then
+dims to 15 percent and finally turns off at the configured timeout. Only GPIO25
+backlight PWM is changed; LVGL, touch scanning, LoRa, GPS, tracker, DIGI, iGate,
+Stopar and map services continue to run. Wake-only input handling in `LvglPort`
+consumes the first touch after full blanking until release.
+
+`TimeService` reads the PCF85063 RTC during startup, accepts valid UTC date/time
+from `GpsService`, periodically writes GPS time back to RTC and exposes both UTC
+and CET/CEST local time to the UI. The main-menu header uses this local clock;
+other screens retain their normal page titles.
+
+## Offline astronomy service (2.7.0)
+
+`AstronomyService` consumes only the local civil date from `TimeService` and the
+current GPS/default `PositionReference`. It uses compact, fixed-memory solar and
+lunar ephemerides, searches for horizon crossings in one-hour intervals and
+refines each crossing by bisection. No network service, heap queue or SD access
+is required.
+
+The calculation is not executed on every main-loop pass. The cached result is
+replaced only after the local date changes, the position source changes, or the
+terminal moves at least 5 km. The screen receives a read-only snapshot and
+formats all labels through the central Czech/English localization layer.

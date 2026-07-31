@@ -5,6 +5,7 @@
 #include <lvgl.h>
 
 #include "app_config.h"
+#include "app/localization.h"
 #include "lora_profile.h"
 #include "ui/ui_components.h"
 
@@ -65,7 +66,7 @@ void refreshChart(const Services::RadioService::ViewState& state) {
 
 void create() {
     resetScreen();
-    createHeader("Diagnostika");
+    createHeader(App::Localization::text("Diagnostika", "Diagnostics"));
 
     lv_obj_t* summary = lv_obj_create(lv_scr_act());
     lv_obj_set_size(summary, 452, 64);
@@ -128,20 +129,20 @@ void update(const Services::RadioService::ViewState& state, std::uint32_t now) {
     if (state.noiseHistoryCount == 0U) {
         lv_label_set_text_fmt(
             latestLabel,
-            "RSSI pozadi %.3f MHz: cekam na prvni mereni",
+            App::Localization::text("RSSI pozadi %.3f MHz: cekam na prvni mereni", "Background RSSI %.3f MHz: waiting for first measurement"),
             static_cast<double>(LoRaProfile::FREQUENCY_MHZ));
         lv_label_set_text(
             statsLabel,
-            "Modra = prumer, oranzova = spicka v mericim okne");
+            App::Localization::text("Modra = prumer, oranzova = spicka v mericim okne", "Blue = average, orange = peak in the measurement window"));
     } else {
         lv_label_set_text_fmt(
             latestLabel,
-            "Posledni: %.1f dBm | spicka %.1f dBm",
+            App::Localization::text("Posledni: %.1f dBm | spicka %.1f dBm", "Latest: %.1f dBm | peak %.1f dBm"),
             static_cast<double>(state.noiseLatestAverageDbm),
             static_cast<double>(state.noiseLatestPeakDbm));
         lv_label_set_text_fmt(
             statsLabel,
-            "Historie %u/%u | prumer %.1f | min %.1f | max %.1f dBm",
+            App::Localization::text("Historie %u/%u | prumer %.1f | min %.1f | max %.1f dBm", "History %u/%u | average %.1f | min %.1f | max %.1f dBm"),
             static_cast<unsigned>(state.noiseHistoryCount),
             static_cast<unsigned>(AppConfig::RADIO_NOISE_HISTORY_LENGTH),
             static_cast<double>(state.noiseHistoryAverageDbm),
@@ -150,12 +151,12 @@ void update(const Services::RadioService::ViewState& state, std::uint32_t now) {
     }
 
     if (!state.initialized) {
-        lv_label_set_text(scheduleLabel, "Radio neni dostupne - mereni je pozastaveno");
+        lv_label_set_text(scheduleLabel, App::Localization::text("Radio neni dostupne - mereni je pozastaveno", "Radio unavailable - measurement paused"));
         lv_obj_set_style_text_color(scheduleLabel, lv_color_hex(0xFF6B6B), 0);
     } else if (state.noiseMeasurementActive) {
         lv_label_set_text_fmt(
             scheduleLabel,
-            "Merim %u/%u vzorku; RX zustava aktivni",
+            App::Localization::text("Merim %u/%u vzorku; RX zustava aktivni", "Measuring %u/%u samples; RX remains active"),
             static_cast<unsigned>(state.noiseBurstProgress),
             static_cast<unsigned>(AppConfig::RADIO_NOISE_BURST_SAMPLES));
         lv_obj_set_style_text_color(scheduleLabel, lv_color_hex(0x42D392), 0);
@@ -163,7 +164,7 @@ void update(const Services::RadioService::ViewState& state, std::uint32_t now) {
         const std::uint32_t remaining = secondsUntil(now, state.noiseNextMeasurementAtMs);
         lv_label_set_text_fmt(
             scheduleLabel,
-            "Dalsi mereni za %lu:%02lu | interval 5 min | 20 bodu",
+            App::Localization::text("Dalsi mereni za %lu:%02lu | interval 5 min | 20 bodu", "Next measurement in %lu:%02lu | 5 min interval | 20 points"),
             static_cast<unsigned long>(remaining / 60U),
             static_cast<unsigned long>(remaining % 60U));
         lv_obj_set_style_text_color(scheduleLabel, lv_color_hex(0x92A7C7), 0);

@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "app/localization.h"
+
 namespace Services {
 namespace {
 
@@ -102,11 +104,11 @@ bool MessageStore::queueOutgoing(
 
     char normalized[Aprs::MAX_MESSAGE_ADDRESS_LENGTH + 1] = {};
     if (!normalizeAddress(recipient, normalized, sizeof(normalized))) {
-        setError(errorText, errorTextCapacity, "Neplatny adresat. Pouzijte max. 9 znaku A-Z, 0-9 a -.");
+        setError(errorText, errorTextCapacity, App::Localization::text("Neplatny adresat. Pouzijte max. 9 znaku A-Z, 0-9 a -.", "Invalid recipient. Use up to 9 characters A-Z, 0-9 and -."));
         return false;
     }
     if (text == nullptr || text[0] == '\0') {
-        setError(errorText, errorTextCapacity, "Text zpravy nesmi byt prazdny.");
+        setError(errorText, errorTextCapacity, App::Localization::text("Text zpravy nesmi byt prazdny.", "Message text must not be empty."));
         return false;
     }
 
@@ -122,7 +124,7 @@ bool MessageStore::queueOutgoing(
         setError(
             errorText,
             errorTextCapacity,
-            "Text musi mit max. 67 ASCII znaku a nesmi obsahovat |, ~ nebo {.");
+            App::Localization::text("Text musi mit max. 67 ASCII znaku a nesmi obsahovat |, ~ nebo {.", "Text must contain at most 67 ASCII characters and must not include |, ~ or {."));
         return false;
     }
 
@@ -138,7 +140,7 @@ bool MessageStore::queueOutgoing(
     entry.transmitAttempts = 0;
 
     if (!insertNewest(entry)) {
-        setError(errorText, errorTextCapacity, "Seznam je plny nevyresenych odchozich zprav.");
+        setError(errorText, errorTextCapacity, App::Localization::text("Seznam je plny nevyresenych odchozich zprav.", "The list is full of unresolved outgoing messages."));
         return false;
     }
 

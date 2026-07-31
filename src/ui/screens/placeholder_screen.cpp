@@ -2,6 +2,7 @@
 
 #include <lvgl.h>
 
+#include "app/localization.h"
 #include "ui/ui_components.h"
 
 namespace Ui {
@@ -34,13 +35,21 @@ void create(const char* title, const char* description) {
     lv_obj_align(descriptionLabel, LV_ALIGN_TOP_LEFT, 0, 10);
 
     lv_obj_t* chip = lv_label_create(card);
-    lv_label_set_text(chip, "Modul bude doplnen samostatnym service a obrazovkou.");
+    lv_label_set_text(
+        chip,
+        App::Localization::text(
+            "Modul bude doplnen samostatnym service a obrazovkou.",
+            "The module will be added as a separate service and screen."));
     lv_obj_set_style_text_font(chip, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(chip, lv_color_hex(0x42D392), 0);
     lv_obj_align(chip, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 
     messageLabel = lv_label_create(lv_scr_act());
-    lv_label_set_text(messageLabel, "Sipka vlevo = hlavni menu");
+    lv_label_set_text(
+        messageLabel,
+        App::Localization::text(
+            "Sipka vlevo = hlavni menu",
+            "Left arrow = main menu"));
     lv_obj_set_style_text_font(messageLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(messageLabel, lv_color_hex(0x92A7C7), 0);
     lv_obj_align(messageLabel, LV_ALIGN_BOTTOM_MID, 0, -72);

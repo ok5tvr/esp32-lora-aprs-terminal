@@ -18,6 +18,7 @@ bool ButtonDriver::begin() {
     pressedAtMs_ = rawPressed_ ? rawChangedAtMs_ : 0;
     lastClickAtMs_ = 0;
     bootClickPending_ = false;
+    pressActivityPending_ = false;
     initialized_ = true;
 
     LOG_I(
@@ -46,6 +47,7 @@ void ButtonDriver::update(std::uint32_t now) {
     stablePressed_ = rawPressed_;
     if (stablePressed_) {
         pressedAtMs_ = now;
+        pressActivityPending_ = true;
         return;
     }
 
@@ -77,6 +79,17 @@ bool ButtonDriver::consumeBootClick() {
     const bool pending = bootClickPending_;
     bootClickPending_ = false;
     return pending;
+}
+
+bool ButtonDriver::consumePressActivity() {
+    const bool pending = pressActivityPending_;
+    pressActivityPending_ = false;
+    return pending;
+}
+
+void ButtonDriver::suppressCurrentClick() {
+    bootClickPending_ = false;
+    ignoreUntilReleased_ = true;
 }
 
 }  // namespace Drivers

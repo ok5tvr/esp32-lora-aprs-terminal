@@ -8,6 +8,7 @@
 
 #include "app_config.h"
 #include "app/tracker_symbols.h"
+#include "app/localization.h"
 #include "app_log.h"
 
 namespace Services {
@@ -34,6 +35,15 @@ constexpr char KEY_APRS_IS_SERVER[] = "ishost";
 constexpr char KEY_APRS_IS_PORT[] = "isport";
 constexpr char KEY_APRS_IS_PASSCODE[] = "ispass";
 constexpr char KEY_APRS_IS_FILTER[] = "isfilter";
+constexpr char KEY_BATTERY_BRIGHTNESS[] = "batbright";
+constexpr char KEY_DISPLAY_TIMEOUT[] = "dispto";
+constexpr char KEY_TRACKER_LANGUAGE[] = "trklang";
+constexpr char KEY_LORA_PRESET[] = "lprof";
+constexpr char KEY_LORA_FREQUENCY[] = "lfreq";
+constexpr char KEY_LORA_BANDWIDTH[] = "lbw";
+constexpr char KEY_LORA_SF[] = "lsf";
+constexpr char KEY_LORA_CR[] = "lcr";
+constexpr char KEY_LORA_POWER[] = "lpwr";
 
 bool validSource(std::uint8_t value) {
     return value <= static_cast<std::uint8_t>(App::TrackerPositionSource::DefaultPosition);
@@ -50,6 +60,35 @@ bool validMode(std::uint8_t value) {
 
 bool validDigiMode(std::uint8_t value) {
     return value <= static_cast<std::uint8_t>(App::DigiMode::FillInAndWide2);
+}
+
+bool validDisplayTimeout(std::uint16_t value) {
+    return value == 0U || value == 30U || value == 60U ||
+        value == 120U || value == 300U;
+}
+
+bool validLoRaPreset(std::uint8_t value) {
+    return value <= static_cast<std::uint8_t>(App::LoRaPreset::Custom);
+}
+
+bool validUiLanguage(std::uint8_t value) {
+    return value <= static_cast<std::uint8_t>(App::UiLanguage::English);
+}
+
+LoRaProfile::Config makeLoRaConfig(
+    float frequencyMHz,
+    float bandwidthKHz,
+    std::uint8_t spreadingFactor,
+    std::uint8_t codingRate,
+    std::int8_t outputPowerDbm) {
+
+    LoRaProfile::Config config;
+    config.frequencyMHz = frequencyMHz;
+    config.bandwidthKHz = bandwidthKHz;
+    config.spreadingFactor = spreadingFactor;
+    config.codingRate = codingRate;
+    config.outputPowerDbm = outputPowerDbm;
+    return config;
 }
 
 bool validAprsIsRfCallsign(const char* callsign) {
@@ -163,6 +202,14 @@ bool SettingsService::begin() {
     std::strncpy(view_.callsign, AppConfig::DEFAULT_CALLSIGN, sizeof(view_.callsign) - 1);
     view_.defaultLatitude = AppConfig::DEFAULT_LATITUDE;
     view_.defaultLongitude = AppConfig::DEFAULT_LONGITUDE;
+    view_.batteryBrightnessPercent = AppConfig::DISPLAY_DEFAULT_BATTERY_BRIGHTNESS_PERCENT;
+    view_.displayTimeoutSeconds = AppConfig::DISPLAY_DEFAULT_TIMEOUT_SECONDS;
+    view_.loraPreset = App::LoRaPreset::CzeAprs;
+    view_.loraFrequencyMHz = LoRaProfile::FREQUENCY_MHZ;
+    view_.loraBandwidthKHz = LoRaProfile::BANDWIDTH_KHZ;
+    view_.loraSpreadingFactor = LoRaProfile::SPREADING_FACTOR;
+    view_.loraCodingRate = LoRaProfile::CODING_RATE;
+    view_.loraOutputPowerDbm = LoRaProfile::OUTPUT_POWER_DBM;
     view_.trackerFixedIntervalSeconds = AppConfig::TRACKER_DEFAULT_INTERVAL_SECONDS;
     view_.digiMaxWideHops = 2;
     std::strncpy(
@@ -194,6 +241,63 @@ bool SettingsService::begin() {
     }
     if (std::isfinite(longitude) && longitude >= -180.0 && longitude <= 180.0) {
         view_.defaultLongitude = longitude;
+    }
+
+    const std::uint8_t storedBrightness = preferences.getUChar(
+        KEY_BATTERY_BRIGHTNESS,
+        AppConfig::DISPLAY_DEFAULT_BATTERY_BRIGHTNESS_PERCENT);
+    if (storedBrightness >= AppConfig::DISPLAY_MIN_BATTERY_BRIGHTNESS_PERCENT &&
+        storedBrightness <= AppConfig::DISPLAY_MAX_BATTERY_BRIGHTNESS_PERCENT) {
+        view_.batteryBrightnessPercent = storedBrightness;
+    }
+    const std::uint32_t storedDisplayTimeout = preferences.getUInt(
+        KEY_DISPLAY_TIMEOUT,
+        AppConfig::DISPLAY_DEFAULT_TIMEOUT_SECONDS);
+    if (storedDisplayTimeout <= 65535U &&
+        validDisplayTimeout(static_cast<std::uint16_t>(storedDisplayTimeout))) {
+        view_.displayTimeoutSeconds = static_cast<std::uint16_t>(storedDisplayTimeout);
+    }
+    const std::uint8_t storedUiLanguage = preferences.getUChar(
+        KEY_TRACKER_LANGUAGE,
+        static_cast<std::uint8_t>(App::UiLanguage::Czech));
+    if (validUiLanguage(storedUiLanguage)) {
+        view_.uiLanguage = static_cast<App::UiLanguage>(storedUiLanguage);
+    }
+
+    const std::uint8_t storedLoRaPreset = preferences.getUChar(
+        KEY_LORA_PRESET,
+        static_cast<std::uint8_t>(App::LoRaPreset::CzeAprs));
+    if (validLoRaPreset(storedLoRaPreset)) {
+        view_.loraPreset = static_cast<App::LoRaPreset>(storedLoRaPreset);
+    }
+    if (view_.loraPreset == App::LoRaPreset::Custom) {
+        const float storedFrequency = preferences.getFloat(
+            KEY_LORA_FREQUENCY, LoRaProfile::FREQUENCY_MHZ);
+        const float storedBandwidth = preferences.getFloat(
+            KEY_LORA_BANDWIDTH, LoRaProfile::BANDWIDTH_KHZ);
+        const std::uint8_t storedSf = preferences.getUChar(
+            KEY_LORA_SF, LoRaProfile::SPREADING_FACTOR);
+        const std::uint8_t storedCr = preferences.getUChar(
+            KEY_LORA_CR, LoRaProfile::CODING_RATE);
+        const std::int32_t storedPower = preferences.getInt(
+            KEY_LORA_POWER, LoRaProfile::OUTPUT_POWER_DBM);
+        const LoRaProfile::Config storedConfig = makeLoRaConfig(
+            storedFrequency,
+            storedBandwidth,
+            storedSf,
+            storedCr,
+            static_cast<std::int8_t>(storedPower));
+        if (storedPower >= LoRaProfile::MIN_OUTPUT_POWER_DBM &&
+            storedPower <= LoRaProfile::MAX_OUTPUT_POWER_DBM &&
+            LoRaProfile::isValidConfig(storedConfig)) {
+            view_.loraFrequencyMHz = storedConfig.frequencyMHz;
+            view_.loraBandwidthKHz = storedConfig.bandwidthKHz;
+            view_.loraSpreadingFactor = storedConfig.spreadingFactor;
+            view_.loraCodingRate = storedConfig.codingRate;
+            view_.loraOutputPowerDbm = storedConfig.outputPowerDbm;
+        } else {
+            view_.loraPreset = App::LoRaPreset::CzeAprs;
+        }
     }
 
     view_.trackerEnabled = preferences.getBool(KEY_TRACKER_ENABLED, false);
@@ -307,36 +411,105 @@ bool SettingsService::save(
     const char* callsign,
     double latitude,
     double longitude,
+    std::uint8_t batteryBrightnessPercent,
+    std::uint16_t displayTimeoutSeconds,
+    App::UiLanguage uiLanguage,
+    App::LoRaPreset loraPreset,
+    float loraFrequencyMHz,
+    float loraBandwidthKHz,
+    std::uint8_t loraSpreadingFactor,
+    std::uint8_t loraCodingRate,
+    std::int8_t loraOutputPowerDbm,
     char* errorText,
     std::size_t errorTextCapacity) {
 
+    const bool english = uiLanguage == App::UiLanguage::English;
     char normalized[CALLSIGN_CAPACITY] = {};
     if (!normalizeCallsign(callsign, normalized, sizeof(normalized))) {
-        setError(errorText, errorTextCapacity, "Neplatny CALL. Pouzijte 1-6 znaku a volitelne SSID 0-15.");
+        setError(errorText, errorTextCapacity, english ? "Invalid callsign. Use 1-6 characters and optional SSID 0-15." : "Neplatny CALL. Pouzijte 1-6 znaku a volitelne SSID 0-15.");
         return false;
     }
     if (!std::isfinite(latitude) || latitude < -90.0 || latitude > 90.0) {
-        setError(errorText, errorTextCapacity, "Zemepisna sirka musi byt -90 az 90.");
+        setError(errorText, errorTextCapacity, english ? "Latitude must be between -90 and 90." : "Zemepisna sirka musi byt -90 az 90.");
         return false;
     }
     if (!std::isfinite(longitude) || longitude < -180.0 || longitude > 180.0) {
-        setError(errorText, errorTextCapacity, "Zemepisna delka musi byt -180 az 180.");
+        setError(errorText, errorTextCapacity, english ? "Longitude must be between -180 and 180." : "Zemepisna delka musi byt -180 az 180.");
         return false;
+    }
+    if (batteryBrightnessPercent < AppConfig::DISPLAY_MIN_BATTERY_BRIGHTNESS_PERCENT ||
+        batteryBrightnessPercent > AppConfig::DISPLAY_MAX_BATTERY_BRIGHTNESS_PERCENT) {
+        setError(errorText, errorTextCapacity, english ? "Battery brightness must be between 10 and 100 percent." : "Jas baterie musi byt 10 az 100 procent.");
+        return false;
+    }
+    if (!validDisplayTimeout(displayTimeoutSeconds)) {
+        setError(errorText, errorTextCapacity, english ? "Invalid display timeout." : "Neplatny cas vypnuti displeje.");
+        return false;
+    }
+    if (!validUiLanguage(static_cast<std::uint8_t>(uiLanguage))) {
+        setError(errorText, errorTextCapacity, english ? "Invalid user interface language." : "Neplatny jazyk rozhrani.");
+        return false;
+    }
+    if (loraPreset != App::LoRaPreset::CzeAprs &&
+        loraPreset != App::LoRaPreset::Custom) {
+        setError(errorText, errorTextCapacity, english ? "Invalid LoRa profile." : "Neplatny profil LoRa.");
+        return false;
+    }
+
+    LoRaProfile::Config loraConfig = LoRaProfile::czeAprsConfig();
+    if (loraPreset == App::LoRaPreset::Custom) {
+        loraConfig = makeLoRaConfig(
+            loraFrequencyMHz,
+            loraBandwidthKHz,
+            loraSpreadingFactor,
+            loraCodingRate,
+            loraOutputPowerDbm);
+        if (!LoRaProfile::isValidConfig(loraConfig)) {
+            setError(
+                errorText,
+                errorTextCapacity,
+                english ? "LoRa: frequency 410-525 MHz, SF7-12, CR 4/5-4/8, power 2-17 dBm." : "LoRa: frekvence 410-525 MHz, SF7-12, CR 4/5-4/8, vykon 2-17 dBm.");
+            return false;
+        }
     }
 
     Preferences preferences;
     if (!preferences.begin(NVS_NAMESPACE, false)) {
-        setError(errorText, errorTextCapacity, "Nelze otevrit NVS pro zapis.");
+        setError(errorText, errorTextCapacity, english ? "Cannot open NVS for writing." : "Nelze otevrit NVS pro zapis.");
         return false;
     }
 
     const bool callSaved = preferences.putString(KEY_CALLSIGN, normalized) > 0;
     const bool latSaved = preferences.putDouble(KEY_LATITUDE, latitude) > 0;
     const bool lonSaved = preferences.putDouble(KEY_LONGITUDE, longitude) > 0;
+    const bool brightnessSaved = preferences.putUChar(
+        KEY_BATTERY_BRIGHTNESS,
+        batteryBrightnessPercent) > 0;
+    const bool timeoutSaved = preferences.putUInt(
+        KEY_DISPLAY_TIMEOUT,
+        displayTimeoutSeconds) > 0;
+    const bool uiLanguageSaved = preferences.putUChar(
+        KEY_TRACKER_LANGUAGE,
+        static_cast<std::uint8_t>(uiLanguage)) > 0;
+    const bool loraPresetSaved = preferences.putUChar(
+        KEY_LORA_PRESET,
+        static_cast<std::uint8_t>(loraPreset)) > 0;
+    const bool loraFrequencySaved = preferences.putFloat(
+        KEY_LORA_FREQUENCY, loraConfig.frequencyMHz) > 0;
+    const bool loraBandwidthSaved = preferences.putFloat(
+        KEY_LORA_BANDWIDTH, loraConfig.bandwidthKHz) > 0;
+    const bool loraSfSaved = preferences.putUChar(
+        KEY_LORA_SF, loraConfig.spreadingFactor) > 0;
+    const bool loraCrSaved = preferences.putUChar(
+        KEY_LORA_CR, loraConfig.codingRate) > 0;
+    const bool loraPowerSaved = preferences.putInt(
+        KEY_LORA_POWER, loraConfig.outputPowerDbm) > 0;
     preferences.end();
 
-    if (!callSaved || !latSaved || !lonSaved) {
-        setError(errorText, errorTextCapacity, "Ulozeni do NVS se nepodarilo.");
+    if (!callSaved || !latSaved || !lonSaved || !brightnessSaved || !timeoutSaved ||
+        !uiLanguageSaved || !loraPresetSaved || !loraFrequencySaved || !loraBandwidthSaved ||
+        !loraSfSaved || !loraCrSaved || !loraPowerSaved) {
+        setError(errorText, errorTextCapacity, english ? "Saving settings to NVS failed." : "Ulozeni do NVS se nepodarilo.");
         return false;
     }
 
@@ -344,15 +517,32 @@ bool SettingsService::save(
     view_.callsign[sizeof(view_.callsign) - 1] = '\0';
     view_.defaultLatitude = latitude;
     view_.defaultLongitude = longitude;
+    view_.batteryBrightnessPercent = batteryBrightnessPercent;
+    view_.displayTimeoutSeconds = displayTimeoutSeconds;
+    view_.uiLanguage = uiLanguage;
+    view_.loraPreset = loraPreset;
+    view_.loraFrequencyMHz = loraConfig.frequencyMHz;
+    view_.loraBandwidthKHz = loraConfig.bandwidthKHz;
+    view_.loraSpreadingFactor = loraConfig.spreadingFactor;
+    view_.loraCodingRate = loraConfig.codingRate;
+    view_.loraOutputPowerDbm = loraConfig.outputPowerDbm;
     view_.persistentStorageReady = true;
     ++view_.revision;
     setError(errorText, errorTextCapacity, "");
     LOG_I(
         "SETTINGS",
-        "Saved CALL %s, default position %.6f %.6f",
+        "Saved CALL %s, position %.6f %.6f, display %u%%/%u s, UI language %u, LoRa %.3f MHz BW %.1f SF%u CR4/%u P%d",
         view_.callsign,
         view_.defaultLatitude,
-        view_.defaultLongitude);
+        view_.defaultLongitude,
+        static_cast<unsigned>(view_.batteryBrightnessPercent),
+        static_cast<unsigned>(view_.displayTimeoutSeconds),
+        static_cast<unsigned>(view_.uiLanguage),
+        static_cast<double>(view_.loraFrequencyMHz),
+        static_cast<double>(view_.loraBandwidthKHz),
+        static_cast<unsigned>(view_.loraSpreadingFactor),
+        static_cast<unsigned>(view_.loraCodingRate),
+        static_cast<int>(view_.loraOutputPowerDbm));
     return true;
 }
 
@@ -367,24 +557,41 @@ bool SettingsService::saveTracker(
     char* errorText,
     std::size_t errorTextCapacity) {
 
+    const bool english = view_.uiLanguage == App::UiLanguage::English;
     if (fixedIntervalSeconds < AppConfig::TRACKER_MIN_INTERVAL_SECONDS ||
         fixedIntervalSeconds > AppConfig::TRACKER_MAX_INTERVAL_SECONDS) {
-        setError(errorText, errorTextCapacity, "Interval musi byt 30 az 3600 sekund.");
+        setError(
+            errorText,
+            errorTextCapacity,
+            english
+                ? "Interval must be between 30 and 3600 seconds."
+                : "Interval musi byt 30 az 3600 sekund.");
         return false;
     }
     if (!App::validTrackerSymbol(symbol)) {
-        setError(errorText, errorTextCapacity, "Neplatny APRS symbol trackeru.");
+        setError(
+            errorText,
+            errorTextCapacity,
+            english ? "Invalid tracker APRS symbol." : "Neplatny APRS symbol trackeru.");
         return false;
     }
     if (source == App::TrackerPositionSource::DefaultPosition &&
         mode == App::TrackerBeaconMode::SmartBeacon) {
-        setError(errorText, errorTextCapacity, "SmartBeacon vyzaduje zdroj GPS.");
+        setError(
+            errorText,
+            errorTextCapacity,
+            english
+                ? "SmartBeacon requires the GPS position source."
+                : "SmartBeacon vyzaduje zdroj GPS.");
         return false;
     }
 
     Preferences preferences;
     if (!preferences.begin(NVS_NAMESPACE, false)) {
-        setError(errorText, errorTextCapacity, "Nelze otevrit NVS pro zapis.");
+        setError(
+            errorText,
+            errorTextCapacity,
+            english ? "Cannot open NVS for writing." : "Nelze otevrit NVS pro zapis.");
         return false;
     }
 
@@ -409,7 +616,12 @@ bool SettingsService::saveTracker(
 
     if (!enabledSaved || !trailEnabledSaved || !sourceSaved || !formatSaved || !modeSaved ||
         !symbolSaved || !intervalSaved) {
-        setError(errorText, errorTextCapacity, "Ulozeni trackeru do NVS se nepodarilo.");
+        setError(
+            errorText,
+            errorTextCapacity,
+            english
+                ? "Saving tracker settings to NVS failed."
+                : "Ulozeni trackeru do NVS se nepodarilo.");
         return false;
     }
 
@@ -451,11 +663,11 @@ bool SettingsService::saveDigiIgate(
     std::size_t errorTextCapacity) {
 
     if (!validDigiMode(static_cast<std::uint8_t>(digiMode))) {
-        setError(errorText, errorTextCapacity, "Neplatny rezim digipeateru.");
+        setError(errorText, errorTextCapacity, App::Localization::text("Neplatny rezim digipeateru.", "Invalid digipeater mode."));
         return false;
     }
     if (maxWideHops < 1 || maxWideHops > 2) {
-        setError(errorText, errorTextCapacity, "Maximalni WIDE musi byt 1 nebo 2 hop.");
+        setError(errorText, errorTextCapacity, App::Localization::text("Maximalni WIDE musi byt 1 nebo 2 hop.", "Maximum WIDE must be 1 or 2 hops."));
         return false;
     }
 
@@ -464,48 +676,48 @@ bool SettingsService::saveDigiIgate(
     char normalizedServer[APRS_IS_SERVER_CAPACITY] = {};
     char normalizedFilter[APRS_IS_FILTER_CAPACITY] = {};
     if (!copyPrintable(wifiSsid != nullptr ? wifiSsid : "", normalizedSsid, sizeof(normalizedSsid), true)) {
-        setError(errorText, errorTextCapacity, "WiFi SSID je prilis dlouhe nebo obsahuje nepovolene znaky.");
+        setError(errorText, errorTextCapacity, App::Localization::text("WiFi SSID je prilis dlouhe nebo obsahuje nepovolene znaky.", "Wi-Fi SSID is too long or contains invalid characters."));
         return false;
     }
     if (!copyPrintable(wifiPassword != nullptr ? wifiPassword : "", normalizedPassword, sizeof(normalizedPassword), true)) {
-        setError(errorText, errorTextCapacity, "WiFi heslo je prilis dlouhe nebo obsahuje nepovolene znaky.");
+        setError(errorText, errorTextCapacity, App::Localization::text("WiFi heslo je prilis dlouhe nebo obsahuje nepovolene znaky.", "Wi-Fi password is too long or contains invalid characters."));
         return false;
     }
     if (!normalizeServer(aprsIsServer, normalizedServer, sizeof(normalizedServer))) {
-        setError(errorText, errorTextCapacity, "Neplatny APRS-IS server.");
+        setError(errorText, errorTextCapacity, App::Localization::text("Neplatny APRS-IS server.", "Invalid APRS-IS server."));
         return false;
     }
     if (!normalizeFilter(aprsIsFilter, normalizedFilter, sizeof(normalizedFilter))) {
-        setError(errorText, errorTextCapacity, "Neplatny APRS-IS filter.");
+        setError(errorText, errorTextCapacity, App::Localization::text("Neplatny APRS-IS filter.", "Invalid APRS-IS filter."));
         return false;
     }
     if (aprsIsPort == 0) {
-        setError(errorText, errorTextCapacity, "APRS-IS port musi byt 1 az 65535.");
+        setError(errorText, errorTextCapacity, App::Localization::text("APRS-IS port musi byt 1 az 65535.", "APRS-IS port must be between 1 and 65535."));
         return false;
     }
     if (aprsIsPasscode < -1 || aprsIsPasscode > 32767) {
-        setError(errorText, errorTextCapacity, "APRS-IS passcode musi byt -1 nebo 0 az 32767.");
+        setError(errorText, errorTextCapacity, App::Localization::text("APRS-IS passcode musi byt -1 nebo 0 az 32767.", "APRS-IS passcode must be -1 or between 0 and 32767."));
         return false;
     }
     if (igateEnabled && !validAprsIsRfCallsign(view_.callsign)) {
         setError(
             errorText,
             errorTextCapacity,
-            "Pro iGate pouzijte platny RF CALL (3-6 znaku, volitelne SSID 1-15; ne -0).");
+            App::Localization::text("Pro iGate pouzijte platny RF CALL (3-6 znaku, volitelne SSID 1-15; ne -0).", "Use a valid RF callsign for iGate (3-6 characters, optional SSID 1-15; not -0)."));
         return false;
     }
     if (igateEnabled && normalizedSsid[0] == '\0') {
-        setError(errorText, errorTextCapacity, "Pro iGate zadejte WiFi SSID.");
+        setError(errorText, errorTextCapacity, App::Localization::text("Pro iGate zadejte WiFi SSID.", "Enter a Wi-Fi SSID for iGate."));
         return false;
     }
     if (igateEnabled && aprsIsPasscode < 0) {
-        setError(errorText, errorTextCapacity, "iGate vyzaduje overeny APRS-IS passcode.");
+        setError(errorText, errorTextCapacity, App::Localization::text("iGate vyzaduje overeny APRS-IS passcode.", "iGate requires a verified APRS-IS passcode."));
         return false;
     }
 
     Preferences preferences;
     if (!preferences.begin(NVS_NAMESPACE, false)) {
-        setError(errorText, errorTextCapacity, "Nelze otevrit NVS pro zapis.");
+        setError(errorText, errorTextCapacity, App::Localization::text("Nelze otevrit NVS pro zapis.", "Cannot open NVS for writing."));
         return false;
     }
 
@@ -533,7 +745,7 @@ bool SettingsService::saveDigiIgate(
         igateEnabledSaved && ssidSaved && passwordSaved && serverSaved &&
         portSaved && passcodeSaved && filterSaved;
     if (!saved) {
-        setError(errorText, errorTextCapacity, "Ulozeni DIGI/iGate do NVS se nepodarilo.");
+        setError(errorText, errorTextCapacity, App::Localization::text("Ulozeni DIGI/iGate do NVS se nepodarilo.", "Saving DIGI/iGate settings to NVS failed."));
         return false;
     }
 

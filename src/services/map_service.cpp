@@ -9,6 +9,7 @@
 #include <esp_heap_caps.h>
 
 #include "app_config.h"
+#include "app/localization.h"
 #include "app_log.h"
 #include "board_pins.h"
 #include "drivers/sd_card_driver.h"
@@ -33,6 +34,10 @@ bool MapService::begin() {
     view_ = ViewState{};
     requestedZoom_ = AppConfig::MAP_DEFAULT_ZOOM;
     view_.zoom = requestedZoom_;
+    view_.followReference = true;
+    followReference_ = true;
+    manualReference_ = PositionReference{};
+    manualReferenceRevision_ = 0;
     view_.sdMounted = Drivers::SdCard::status().mounted;
 
     constexpr std::size_t bufferBytes =
@@ -42,7 +47,7 @@ bool MapService::begin() {
         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
 
     if (buffer_ == nullptr) {
-        setStatus("Nedostatek pameti pro mapovy framebuffer.");
+        setStatus(App::Localization::text("Nedostatek pameti pro mapovy framebuffer.", "Not enough memory for the map framebuffer."));
         LOG_E("MAP", "Unable to allocate %u-byte map framebuffer",
               static_cast<unsigned>(bufferBytes));
         return false;
@@ -52,8 +57,8 @@ bool MapService::begin() {
     view_.initialized = true;
     clearBuffer();
     setStatus(view_.sdMounted
-        ? "Mapa pripravena; cekam na otevreni obrazovky."
-        : "SD karta neni dostupna; mapove dlazdice nelze nacist.");
+        ? App::Localization::text("Mapa pripravena; cekam na otevreni obrazovky.", "Map ready; waiting for the screen to be opened.")
+        : App::Localization::text("SD karta neni dostupna; mapove dlazdice nelze nacist.", "SD card is unavailable; map tiles cannot be loaded."));
     LOG_I(
         "MAP",
         "Framebuffer ready: %ux%u, %u bytes",
@@ -76,7 +81,7 @@ void MapService::update(
         if (!sdMounted) {
             closeCurrentTile();
             view_.loading = false;
-            setStatus("SD karta neni dostupna; mapove dlazdice nelze nacist.");
+            setStatus(App::Localization::text("SD karta neni dostupna; mapove dlazdice nelze nacist.", "SD card is unavailable; map tiles cannot be loaded."));
         } else {
             forceRender_ = true;
         }
@@ -100,17 +105,20 @@ void MapService::update(
         forceRender_ = true;
     }
 
-    if (!reference.valid) {
+    const PositionReference& centerReference = followReference_ ? reference : manualReference_;
+    if (!centerReference.valid) {
         view_.centerValid = false;
         view_.loading = false;
         closeCurrentTile();
-        setStatus("Mapa ceka na GPS nebo vychozi polohu.");
+        setStatus(App::Localization::text("Mapa ceka na GPS nebo vychozi polohu.", "Map is waiting for GPS or the default position."));
         return;
     }
 
-    if (forceRender_ || shouldRecenter(reference)) {
+    if (forceRender_) {
+        requestRender(centerReference);
+    } else if (followReference_ && shouldRecenter(reference)) {
         requestRender(reference);
-    } else if (reference.revision != lastReferenceRevision_) {
+    } else if (followReference_ && reference.revision != lastReferenceRevision_) {
         lastReferenceRevision_ = reference.revision;
     }
 
@@ -134,7 +142,48 @@ void MapService::zoomOut() {
 }
 
 void MapService::recenter() {
+    followReference_ = true;
+    view_.followReference = true;
     forceRender_ = true;
+}
+
+void MapService::panByPixels(std::int16_t deltaX, std::int16_t deltaY) {
+    if (!view_.centerValid || (deltaX == 0 && deltaY == 0)) {
+        return;
+    }
+
+    const double size = MapProjection::worldSize(view_.zoom);
+    if (!(size > 0.0)) {
+        return;
+    }
+
+    double centerX = view_.centerWorldX - static_cast<double>(deltaX);
+    centerX = std::fmod(centerX, size);
+    if (centerX < 0.0) {
+        centerX += size;
+    }
+
+    double centerY = view_.centerWorldY - static_cast<double>(deltaY);
+    centerY = std::max(0.0, std::min(size, centerY));
+
+    const MapProjection::GeoCoordinate coordinate = MapProjection::fromWorldPixel(
+        centerX,
+        centerY,
+        view_.zoom);
+    if (!coordinate.valid) {
+        setStatus(App::Localization::text("Rucni posun mapy vedl na neplatnou polohu.", "Manual map panning produced an invalid position."));
+        return;
+    }
+
+    manualReference_.valid = true;
+    manualReference_.fromGps = false;
+    manualReference_.latitude = coordinate.latitude;
+    manualReference_.longitude = coordinate.longitude;
+    manualReference_.revision = ++manualReferenceRevision_;
+    followReference_ = false;
+    view_.followReference = false;
+    forceRender_ = true;
+    setStatus(App::Localization::text("Rucni posun mapy; OK obnovi sledovani GPS.", "Map panned manually; OK resumes GPS tracking."));
 }
 
 const MapService::ViewState& MapService::viewState() const {
@@ -189,6 +238,7 @@ void MapService::requestRender(const PositionReference& reference) {
     view_.centerLatitude = reference.latitude;
     view_.centerLongitude = reference.longitude;
     view_.centerFromGps = reference.fromGps;
+    view_.followReference = followReference_;
     view_.zoom = requestedZoom_;
 
     const MapProjection::WorldPixel center = MapProjection::toWorldPixel(
@@ -198,7 +248,7 @@ void MapService::requestRender(const PositionReference& reference) {
     if (!center.valid) {
         view_.centerValid = false;
         view_.loading = false;
-        setStatus("Neplatna poloha stredu mapy.");
+        setStatus(App::Localization::text("Neplatna poloha stredu mapy.", "Invalid map center position."));
         return;
     }
 
@@ -215,11 +265,11 @@ void MapService::requestRender(const PositionReference& reference) {
     ++view_.viewRevision;
 
     if (!view_.sdMounted) {
-        setStatus("SD karta neni dostupna; zobrazuji prazdnou mapu.");
+        setStatus(App::Localization::text("SD karta neni dostupna; zobrazuji prazdnou mapu.", "SD card is unavailable; displaying an empty map."));
     } else if (view_.tileJobsTotal == 0U) {
-        setStatus("Pro aktualni vyrez nebyly vytvoreny mapove ulohy.");
+        setStatus(App::Localization::text("Pro aktualni vyrez nebyly vytvoreny mapove ulohy.", "No map tile jobs were created for the current view."));
     } else {
-        setStatus("Nacitam offline mapu z SD karty...");
+        setStatus(App::Localization::text("Nacitam offline mapu z SD karty...", "Loading the offline map from the SD card..."));
     }
 }
 
@@ -368,13 +418,13 @@ void MapService::finishCurrentTile(bool missing) {
 void MapService::completeRender() {
     view_.loading = false;
     if (view_.missingTiles == 0U) {
-        setStatus("Offline mapa nactena.");
+        setStatus(App::Localization::text("Mapa nactena.", "Map loaded."));
     } else {
         char text[112];
         std::snprintf(
             text,
             sizeof(text),
-            "Mapa nactena; chybi %u dlazdic na SD karte.",
+            App::Localization::text("Mapa nactena; chybi %u dlazdic na SD karte.", "Map loaded; %u tiles are missing from the SD card."),
             static_cast<unsigned>(view_.missingTiles));
         setStatus(text);
     }

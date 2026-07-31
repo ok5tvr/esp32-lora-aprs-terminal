@@ -41,7 +41,7 @@ public:
         bool manualPaused = false;
         bool autoPaused = false;
         State state = State::Disabled;
-        char statusText[96] = "Stopar je vypnuty.";
+        char statusText[96] = "--";
         char activeFile[LOG_NAME_CAPACITY] = {};
         std::uint32_t pointsWritten = 0;
         std::uint32_t droppedLines = 0;
@@ -123,6 +123,7 @@ private:
     double movementReferenceLatitude_ = 0.0;
     double movementReferenceLongitude_ = 0.0;
     bool fatalError_ = false;
+    std::uint32_t localizationRevision_ = 0;
 };
 
 }  // namespace Services

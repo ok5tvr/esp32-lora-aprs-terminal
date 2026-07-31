@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <lvgl.h>
 
+#include "app/localization.h"
 #include "services/geo_utils.h"
 #include "ui/aprs_icons.h"
 #include "ui/ui_components.h"
@@ -66,7 +67,12 @@ void createWeatherRow(
         station.hasPosition);
     lv_obj_align(symbolIcon, LV_ALIGN_TOP_RIGHT, 0, -2);
 
-    char relativeText[96] = "Vzdalenost --";
+    char relativeText[96] = {};
+    std::snprintf(
+        relativeText,
+        sizeof(relativeText),
+        "%s",
+        App::Localization::text("Vzdalenost --", "Distance --"));
     if (station.hasPosition && reference.valid) {
         const Services::DistanceBearing relative = Services::calculateDistanceBearing(
             reference.latitude,
@@ -112,7 +118,13 @@ void createWeatherRow(
     std::snprintf(gust, sizeof(gust), station.hasWindGust ? "%.1f" : "--",
         static_cast<double>(station.windGustKmh));
     char line2[160];
-    std::snprintf(line2, sizeof(line2), "V %s  %s   G %s km/h", direction, wind, gust);
+    std::snprintf(
+        line2,
+        sizeof(line2),
+        App::Localization::text("V %s  %s   G %s km/h", "W %s  %s   G %s km/h"),
+        direction,
+        wind,
+        gust);
     createMetricLabel(row, line2, LV_ALIGN_TOP_LEFT, 0, 47, 0xBDCAE0);
 
     char rain1h[20];
@@ -126,10 +138,20 @@ void createWeatherRow(
         static_cast<double>(station.rainTodayMm));
     char line3[160];
     if (station.hasSolarRadiation) {
-        std::snprintf(line3, sizeof(line3), "R 1h %s  24h %s  D %s mm | S %.0f W/m2",
+        std::snprintf(
+            line3,
+            sizeof(line3),
+            App::Localization::text(
+                "Srazky 1h %s  24h %s  dnes %s mm | solar %.0f W/m2",
+                "Rain 1h %s  24h %s  today %s mm | solar %.0f W/m2"),
             rain1h, rain24h, rainToday, static_cast<double>(station.solarRadiationWm2));
     } else {
-        std::snprintf(line3, sizeof(line3), "R 1h %s  24h %s  dnes %s mm",
+        std::snprintf(
+            line3,
+            sizeof(line3),
+            App::Localization::text(
+                "Srazky 1h %s  24h %s  dnes %s mm",
+                "Rain 1h %s  24h %s  today %s mm"),
             rain1h, rain24h, rainToday);
     }
     createMetricLabel(row, line3, LV_ALIGN_TOP_LEFT, 0, 67, 0x92A7C7);
@@ -139,13 +161,13 @@ void createWeatherRow(
         std::snprintf(
             positionText,
             sizeof(positionText),
-            "Pozice %.5f%c %.5f%c",
+            App::Localization::text("Pozice %.5f%c %.5f%c", "Position %.5f%c %.5f%c"),
             station.latitude < 0.0 ? -station.latitude : station.latitude,
             station.latitude < 0.0 ? 'S' : 'N',
             station.longitude < 0.0 ? -station.longitude : station.longitude,
             station.longitude < 0.0 ? 'W' : 'E');
     } else {
-        std::snprintf(positionText, sizeof(positionText), "Poloha v paketu neni");
+        std::snprintf(positionText, sizeof(positionText), App::Localization::text("Poloha v paketu neni", "No position in packet"));
     }
     createMetricLabel(row, positionText, LV_ALIGN_BOTTOM_LEFT, 0, 0, 0x92A7C7);
 }
@@ -154,7 +176,7 @@ void createWeatherRow(
 
 void create() {
     resetScreen();
-    createHeader("APRS meteostanice");
+    createHeader(App::Localization::text("APRS meteostanice", "APRS weather stations"));
 
     referenceLabel = lv_label_create(lv_scr_act());
     lv_label_set_text(referenceLabel, "Ref: --");
@@ -212,7 +234,11 @@ void update(
 
     if (state.count == 0) {
         lv_obj_t* emptyLabel = lv_label_create(listObject);
-        lv_label_set_text(emptyLabel, "Zatim nebyl prijat platny APRS meteorologicky paket.");
+        lv_label_set_text(
+            emptyLabel,
+            App::Localization::text(
+                "Zatim nebyl prijat platny APRS meteorologicky paket.",
+                "No valid APRS weather packet has been received yet."));
         lv_obj_set_width(emptyLabel, 420);
         lv_label_set_long_mode(emptyLabel, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_font(emptyLabel, &lv_font_montserrat_16, 0);

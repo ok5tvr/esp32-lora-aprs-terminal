@@ -1,5 +1,105 @@
 # Changelog
 
+## 2.7.1
+
+- Added a dynamically drawn Moon phase disk to the Astronomy page; no bitmap assets are stored in Flash.
+- Added current Sun altitude above or below the horizon.
+- Sun altitude, Moon phase, illumination and Moon disk refresh every five minutes.
+- Astronomy refreshes immediately when the local date, position source or position changes significantly.
+
+## 2.7.0
+
+- nova polozka hlavniho menu **Astronomie / Astronomy** vlozena za GPS prijimac
+- offline vypocet vychodu a zapadu Slunce pro aktualni lokalni datum a GPS/vychozi polohu
+- vypocet delky dne a podpora polarnich stavu bez vychodu nebo zapadu
+- offline vypocet vychodu a zapadu Mesice s korekci horizontalni paralaxy
+- zobrazeni osmi zakladnich fazi Mesice, osvetlene casti v procentech a priblizneho stari
+- datum a mistni cas vychazeji z TimeService: RTC pri startu a automaticka synchronizace z GPS UTC
+- vysledky se prepocitaji pouze pri zmene dne, zdroje polohy nebo presunu alespon o 5 km
+- vsechny popisy jsou dostupne cesky i anglicky a prepnuti jazyka nevyzaduje restart
+- doplnen hostitelsky test pro Plzen, polarni den, lunarni fazi a invalidni vstupy
+
+## 2.6.1
+
+- upraveno poradi hlavniho menu podle provozni priority
+- nove poradi: LoRa APRS, Prijate stanice, Zpravy, Meteostanice, Mapa, Tracker, Stopar, DIGI / iGate, GPS prijimac, Diagnostika, Napajeni, Nastaveni
+- polozka **Offline mapa / Offline map** prejmenovana na **Mapa / Map** v hlavnim menu i hlavicce mapove obrazovky
+- cilove obrazovky a vsechny ostatni funkce zustavaji beze zmeny
+- doplnen hostitelsky test presneho ceskeho a anglickeho poradi menu
+
+## 2.6.0
+
+- volba jazyka byla rozsirena z obrazovky Tracker na kompletni uzivatelske rozhrani
+- nova centralni lokalizacni vrstva `App::Localization` s cestinou jako vychozim jazykem
+- jazyk se nacita z NVS pred inicializaci displeje a sluzeb, aby byl spravny uz od startu
+- prepnuti **Jazyk rozhrani / Interface language** se po ulozeni projevi okamzite bez restartu
+- prelozeno hlavni menu, Nastaveni, Tracker, GPS, LoRa, zpravy, stanice, navigace, pocasi, mapa, Stopar, napajeni, diagnostika a DIGI/iGate
+- prelozeny provozni stavy a chybova hlaseni generovana sluzbami radia, mapy, napajeni, Stopare, zprav a APRS-IS
+- zachovana zpetna kompatibilita NVS: jazyk zustava ulozen pod klicem `trklang`
+- APRS/NMEA/LoRa protokolova data, volaci znacky, jednotky a surove odpovedi serveru se neprekladaji
+- prvni radek noveho TXT logu Stopare odpovida zvolenemu jazyku
+- doplnen hostitelsky test lokalizace a syntakticka kontrola vsech obrazovek s `-Wall -Wextra -Werror`
+
+## 2.5.0
+
+- nova volba **Jazyk trackeru** na strance **Nastaveni**: `Cestina` nebo `English`
+- vychozi jazyk zustava cestina; volba se uklada do NVS pod klicem `trklang`
+- lokalizovany nazvy, napovedy a hodnoty vsech poli na obrazovce Trackeru
+- lokalizovane nazvy APRS symbolu v rozbalovacim seznamu
+- lokalizovany souhrn GPS, provozni stavy Trackeru, SmartBeaconu a rucniho BOOT beaconu
+- lokalizovana potvrzeni ulozeni a chyby pri zapnuti trackeru, GPS, radia nebo Stopare
+- volba jazyka nema vliv na APRS ramce, LoRa parametry, mapu ani ostatni obrazovky
+- doplneny syntakticke hostitelske kontroly lokalizace, nastaveni a NVS rozhrani
+
+## 2.4.0
+
+- nova sekce **LoRa modul** na strance **Nastaveni**
+- vychozi profil **CZE APRS** zachovava dosavadni 433.775 MHz, BW 125 kHz, SF12, CR 4/5 a TX 10 dBm
+- volitelny profil **Vlastni** umoznuje frekvenci 410-525 MHz, BW 62.5/125/250/500 kHz, SF7-SF12, CR 4/5-4/8 a TX 2/5/10/14/17 dBm
+- LoRa profil a parametry se ukladaji do NVS a nacitaji se pred inicializaci SX1278
+- zmena za provozu ceka na dokonceni vysilani a vyprazdneni centralni TX fronty; potom se znovu inicializuje pouze LoRa modul
+- pokud uzivatel pred aplikaci zmeny zvoli zpet aktualne aktivni parametry, cekajici preladeni se zrusi bez reinicializace
+- RX/TX/error pocitadla se pri zmene profilu zachovavaji a GPS, displej, mapa, Stopar ani sitove sluzby se nerestartuji
+- stranka **LoRa APRS** zobrazuje skutecne aktivni parametry a priznak `CEKA`, dokud nelze zmenu bezpecne aplikovat
+- sync word 0x12, explicitni hlavicka, preambule 8 a vypnute RadioLib CRC zustavaji pevne kvuli kompatibilite paketoveho formatu
+- rozsireny hostitelsky test NVS o vychozi CZE profil, validaci vlastniho profilu, persistenci a navrat k CZE hodnotam
+
+## 2.3.0
+
+- dvoustupnove setreni podsviceni pri provozu z baterie: 0-30 s nastaveny jas, od 30 s 15 %, po nastavenem timeoutu vypnuto
+- s vychozim timeoutem 60 s odpovida prubeh presne 70 % -> 15 % -> 0 %
+- jakakoli aktivita vrati ztlumeny displej na nastaveny jas; prvni dotyk po uplnem zhasnuti zustava pouze probouzecí
+- USB-C nadale vynucuje 100 % jasu a vypina ztlumeni i automaticke zhasnuti
+- nova `TimeService` pro onboard PCF85063 RTC na I2C adrese 0x51
+- pri startu se cas nacte z RTC; platny GPS UTC cas automaticky synchronizuje systemovy cas i RTC
+- RTC se z GPS znovu koriguje nejvyse jednou za sest hodin; neuspesny prvni zapis se opakuje po minute
+- hlavni menu zobrazuje lokalni hodiny misto textu `LoRa`; zeleny cas znamena aktualni GPS synchronizaci, bily cas RTC
+- automaticky prevod UTC na stredoevropsky cas CET/CEST vcetne evropskeho letniho casu
+- nove hostitelske testy prechodu plny jas / ztlumeni / vypnuti a synchronizace RTC/GPS
+
+## 2.2.0
+
+- bateriovy usporny rezim displeje bez omezeni GPS, LoRa RX/TX, trackeru, DIGI, iGate, Stopare nebo mapy
+- pri USB-C je podsviceni vzdy 100 % a automaticke vypnuti je zakazane
+- pri provozu z baterie nastavitelny jas 10-100 %, vychozi 70 %
+- nastavitelne vypnuti podsviceni: nikdy, 30 s, 60 s, 2 min nebo 5 min; vychozi 60 s
+- jas a timeout se ukladaji do NVS na strance **Nastaveni**
+- prvni dotyk po zhasnuti pouze probudi displej a je blokovan az do uvolneni prstu
+- BOOT stisk pri zhasnutem displeji pouze probudi podsviceni a neodesle rucni beacon
+- automaticke probuzeni a plny jas po pripojeni USB-C
+- 20kHz osmibitove PWM podsviceni na GPIO25
+- nova sluzba `DisplayPowerService` a hostitelsky test prechodu baterie/USB, timeoutu a probuzeni
+
+## 2.1.0
+
+- dotykove posouvani offline mapy tazenim prstu v libovolnem smeru
+- plynuly nahled posunu: existujici mapa, APRS ikony, vlastni poloha a stopa se behem tahu pohybuji spolu
+- skutecne precteni dlazdic se spusti az po uvolneni prstu, aby se SD karta nezatezovala pri kazdem dotykovem kroku
+- sestipixelovy prah oddeluje kratky dotyk od posunu a ponechava prostor pro budouci vyber stanice
+- po rucnim posunu se vypne automaticke sledovani GPS; stavovy radek zobrazi `MAN`
+- tlacitko OK znovu zapne sledovani GPS nebo vychozi polohy a vycentruje mapu
+- doplnena inverzni Web Mercator projekce a testy rucniho posunu, datove hranice a navratu na GPS
+
 ## 2.0.0
 
 - nova polozka hlavniho menu **Offline mapa**
@@ -38,8 +138,6 @@
 - emergency detekce z textoveho `!EMERGENCY!` a standardniho Mic-E stavu
 - detail stanice zobrazuje format, telemetrii, PHG, frekvenci a emergency
 - meteostanice maji vyber a samostatnou detailni obrazovku s poslednim TNC2 ramcem
-
-# Changelog
 
 ## 1.3.1
 

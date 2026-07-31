@@ -46,18 +46,22 @@ public:
 
     Sx1278Driver();
 
-    bool begin();
+    bool begin(const LoRaProfile::Config& config);
+    bool reconfigure(const LoRaProfile::Config& config);
     bool recover();
     void update(std::uint32_t now);
     bool startTransmit(const std::uint8_t* data, std::size_t length, std::uint32_t now);
     bool takePacket(Packet& packet);
     bool readCurrentRssi(float& rssiDbm);
     const Status& status() const;
+    const LoRaProfile::Config& config() const;
 
 private:
     static Sx1278Driver* activeInstance_;
     static void onRadioInterrupt();
 
+    bool initialize();
+    static void preserveCounters(const Status& previous, Status& current);
     bool startReceive();
     void processReceiveInterrupt();
     void processTransmitInterrupt();
@@ -69,6 +73,7 @@ private:
     SX1278 radio_;
 
     volatile bool interruptFlag_ = false;
+    LoRaProfile::Config config_ = LoRaProfile::czeAprsConfig();
     Status status_;
     Packet pendingPacket_;
     bool packetAvailable_ = false;

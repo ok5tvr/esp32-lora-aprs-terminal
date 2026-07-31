@@ -20,9 +20,16 @@ struct ScreenPoint {
     double y = 0.0;
 };
 
+struct GeoCoordinate {
+    bool valid = false;
+    double latitude = 0.0;
+    double longitude = 0.0;
+};
+
 bool validCoordinate(double latitude, double longitude);
 double worldSize(std::uint8_t zoom);
 WorldPixel toWorldPixel(double latitude, double longitude, std::uint8_t zoom);
+GeoCoordinate fromWorldPixel(double x, double y, std::uint8_t zoom);
 ScreenPoint projectToViewport(
     double latitude,
     double longitude,

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <lvgl.h>
 
+#include "app/localization.h"
 #include "ui/ui_components.h"
 
 namespace Ui {
@@ -47,11 +48,14 @@ void copyText(char* output, std::size_t capacity, const char* input) {
 const char* deliveryText(const Services::MessageStore::Message& message) {
     using Delivery = Services::MessageStore::DeliveryState;
     switch (message.state) {
-        case Delivery::Pending: return "CEKA ACK";
+        case Delivery::Pending: return App::Localization::text("CEKA ACK", "WAITING ACK");
         case Delivery::Acknowledged: return "ACK";
         case Delivery::Rejected: return "REJ";
-        case Delivery::Failed: return "CHYBA";
-        case Delivery::Received: return message.groupMessage ? "SKUPINA" : "PRIJATO";
+        case Delivery::Failed: return App::Localization::text("CHYBA", "ERROR");
+        case Delivery::Received:
+            return message.groupMessage
+                ? App::Localization::text("SKUPINA", "GROUP")
+                : App::Localization::text("PRIJATO", "RECEIVED");
         default: return "";
     }
 }
@@ -124,9 +128,17 @@ void createEditor(EditorStage stage) {
     lv_obj_t* title = lv_label_create(editorOverlay);
     char titleText[64] = {};
     if (stage == EditorStage::Recipient) {
-        std::snprintf(titleText, sizeof(titleText), "Adresat APRS zpravy");
+        std::snprintf(
+            titleText,
+            sizeof(titleText),
+            "%s",
+            App::Localization::text("Adresat APRS zpravy", "APRS message recipient"));
     } else {
-        std::snprintf(titleText, sizeof(titleText), "Zprava pro %s", recipientDraft);
+        std::snprintf(
+            titleText,
+            sizeof(titleText),
+            App::Localization::text("Zprava pro %s", "Message to %s"),
+            recipientDraft);
     }
     lv_label_set_text(title, titleText);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
@@ -152,8 +164,12 @@ void createEditor(EditorStage stage) {
     lv_label_set_text(
         editorHint,
         stage == EditorStage::Recipient
-            ? "Potvrdte CALL/SSID tlacitkem klavesnice."
-            : "Max. 67 ASCII znaku; znaky | ~ { nejsou povoleny.");
+            ? App::Localization::text(
+                "Potvrdte CALL/SSID tlacitkem klavesnice.",
+                "Confirm the callsign/SSID with the keyboard button.")
+            : App::Localization::text(
+                "Max. 67 ASCII znaku; znaky | ~ { nejsou povoleny.",
+                "Maximum 67 ASCII characters; | ~ { are not allowed."));
     lv_obj_set_width(editorHint, 452);
     lv_label_set_long_mode(editorHint, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_font(editorHint, &lv_font_montserrat_14, 0);
@@ -182,7 +198,11 @@ void advanceEditor() {
         if (value == nullptr || value[0] == '\0') {
             pendingReady = false;
             if (editorHint != nullptr) {
-                lv_label_set_text(editorHint, "Adresat nesmi byt prazdny.");
+                lv_label_set_text(
+                    editorHint,
+                    App::Localization::text(
+                        "Adresat nesmi byt prazdny.",
+                        "The recipient cannot be empty."));
                 lv_obj_set_style_text_color(editorHint, lv_color_hex(0xFF6B6B), 0);
             }
             return;
@@ -199,7 +219,9 @@ void advanceEditor() {
 
     copyText(textDraft, sizeof(textDraft), value);
     if (currentSendHandler == nullptr) {
-        setMessage("Odesilani zpravy neni dostupne.");
+        setMessage(App::Localization::text(
+            "Odesilani zpravy neni dostupne.",
+            "Message sending is unavailable."));
         closeEditor();
         return;
     }
@@ -213,10 +235,16 @@ void advanceEditor() {
         currentSendContext);
     if (queued) {
         closeEditor();
-        setMessage("Zprava byla zarazena k odeslani; ceka se na ACK.");
+        setMessage(App::Localization::text(
+            "Zprava byla zarazena k odeslani; ceka se na ACK.",
+            "The message was queued for transmission; waiting for ACK."));
     } else {
         if (editorHint != nullptr) {
-            lv_label_set_text(editorHint, error[0] != '\0' ? error : "Zpravu se nepodarilo zaradit.");
+            lv_label_set_text(editorHint, error[0] != '\0'
+                ? error
+                : App::Localization::text(
+                    "Zpravu se nepodarilo zaradit.",
+                    "The message could not be queued."));
             lv_obj_set_style_text_color(editorHint, lv_color_hex(0xFF6B6B), 0);
         }
         pendingReady = false;
@@ -297,7 +325,7 @@ void create(App::MessageSendHandler sendHandler, void* sendContext) {
     std::memset(rows, 0, sizeof(rows));
 
     resetScreen();
-    createHeader("APRS zpravy");
+    createHeader(App::Localization::text("APRS zpravy", "APRS messages"));
 
     countLabel = lv_label_create(lv_scr_act());
     lv_label_set_text(countLabel, "0/20");
@@ -306,7 +334,11 @@ void create(App::MessageSendHandler sendHandler, void* sendContext) {
     lv_obj_align(countLabel, LV_ALIGN_TOP_RIGHT, -14, 16);
 
     statusLabel = lv_label_create(lv_scr_act());
-    lv_label_set_text(statusLabel, "OK = nova zprava; vyberte radek pro odpoved.");
+    lv_label_set_text(
+        statusLabel,
+        App::Localization::text(
+            "OK = nova zprava; vyberte radek pro odpoved.",
+            "OK = new message; select a row to reply."));
     lv_obj_set_width(statusLabel, 375);
     lv_label_set_long_mode(statusLabel, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_font(statusLabel, &lv_font_montserrat_14, 0);
@@ -359,7 +391,11 @@ void update(const Services::MessageStore::ViewState& state) {
 
     if (state.count == 0) {
         lv_obj_t* empty = lv_label_create(listObject);
-        lv_label_set_text(empty, "Zatim nebyla prijata ani odeslana zadna APRS zprava.");
+        lv_label_set_text(
+            empty,
+            App::Localization::text(
+                "Zatim nebyla prijata ani odeslana zadna APRS zprava.",
+                "No APRS message has been received or sent yet."));
         lv_obj_set_width(empty, 420);
         lv_label_set_long_mode(empty, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_font(empty, &lv_font_montserrat_16, 0);
@@ -415,7 +451,9 @@ void setMessage(const char* text) {
         lv_label_set_text(statusLabel, text != nullptr ? text : "");
         lv_obj_set_style_text_color(
             statusLabel,
-            (text != nullptr && std::strstr(text, "zarazena") != nullptr)
+            (text != nullptr &&
+             (std::strstr(text, "zarazena") != nullptr ||
+              std::strstr(text, "queued") != nullptr))
                 ? lv_color_hex(0x42D392)
                 : lv_color_hex(0xFFB454),
             0);

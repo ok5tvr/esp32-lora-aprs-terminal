@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <lvgl.h>
 
+#include "app/localization.h"
 #include "services/geo_utils.h"
 #include "ui/aprs_icons.h"
 #include "ui/ui_components.h"
@@ -82,10 +83,10 @@ lv_obj_t* createStationRow(
                 relative.bearingDegrees,
                 Services::cardinalDirection(relative.bearingDegrees));
         } else {
-            std::snprintf(positionText, sizeof(positionText), "%.5f, %.5f | vzdalenost --", station.latitude, station.longitude);
+            std::snprintf(positionText, sizeof(positionText), App::Localization::text("%.5f, %.5f | vzdalenost --", "%.5f, %.5f | distance --"), station.latitude, station.longitude);
         }
     } else {
-        std::snprintf(positionText, sizeof(positionText), "Poloha v paketu neni");
+        std::snprintf(positionText, sizeof(positionText), App::Localization::text("Poloha v paketu neni", "No position in packet"));
     }
     lv_label_set_text(positionLabel, positionText);
     lv_obj_set_width(positionLabel, 405);
@@ -100,7 +101,7 @@ lv_obj_t* createStationRow(
 
 void create() {
     resetScreen();
-    createHeader("Slysene APRS entity");
+    createHeader(App::Localization::text("Slysene APRS entity", "Received APRS entities"));
 
     referenceLabel = lv_label_create(lv_scr_act());
     lv_label_set_text(referenceLabel, "Ref: --");
@@ -166,7 +167,11 @@ void update(
 
     if (state.count == 0) {
         lv_obj_t* emptyLabel = lv_label_create(listObject);
-        lv_label_set_text(emptyLabel, "Zatim nebyla prijata zadna platna APRS entita.");
+        lv_label_set_text(
+            emptyLabel,
+            App::Localization::text(
+                "Zatim nebyla prijata zadna platna APRS entita.",
+                "No valid APRS entity has been received yet."));
         lv_obj_set_width(emptyLabel, 420);
         lv_label_set_long_mode(emptyLabel, LV_LABEL_LONG_WRAP);
         lv_obj_set_style_text_font(emptyLabel, &lv_font_montserrat_16, 0);

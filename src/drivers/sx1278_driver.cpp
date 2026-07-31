@@ -34,7 +34,21 @@ void Sx1278Driver::onRadioInterrupt() {
     }
 }
 
-bool Sx1278Driver::begin() {
+bool Sx1278Driver::begin(const LoRaProfile::Config& config) {
+    config_ = config;
+    return initialize();
+}
+
+bool Sx1278Driver::initialize() {
+    if (status_.initialized) {
+        if (interruptAction_ == InterruptAction::Receive) {
+            radio_.clearPacketReceivedAction();
+        } else if (interruptAction_ == InterruptAction::Transmit) {
+            radio_.clearPacketSentAction();
+        }
+        radio_.standby();
+    }
+
     status_ = Status{};
     interruptFlag_ = false;
     packetAvailable_ = false;
@@ -51,14 +65,21 @@ bool Sx1278Driver::begin() {
         BoardPins::LORA_MOSI,
         BoardPins::LORA_CS);
 
-    LOG_I("RADIO", "Initializing SX1278 on %.3f MHz", LoRaProfile::FREQUENCY_MHZ);
+    LOG_I(
+        "RADIO",
+        "Initializing SX1278 %.3f MHz BW %.1f SF%u CR4/%u P%d",
+        static_cast<double>(config_.frequencyMHz),
+        static_cast<double>(config_.bandwidthKHz),
+        static_cast<unsigned>(config_.spreadingFactor),
+        static_cast<unsigned>(config_.codingRate),
+        static_cast<int>(config_.outputPowerDbm));
     std::int16_t state = radio_.begin(
-        LoRaProfile::FREQUENCY_MHZ,
-        LoRaProfile::BANDWIDTH_KHZ,
-        LoRaProfile::SPREADING_FACTOR,
-        LoRaProfile::CODING_RATE,
+        config_.frequencyMHz,
+        config_.bandwidthKHz,
+        config_.spreadingFactor,
+        config_.codingRate,
         LoRaProfile::SYNC_WORD,
-        LoRaProfile::OUTPUT_POWER_DBM,
+        config_.outputPowerDbm,
         LoRaProfile::PREAMBLE_LENGTH,
         LoRaProfile::GAIN);
 
@@ -88,13 +109,28 @@ bool Sx1278Driver::begin() {
     return true;
 }
 
+void Sx1278Driver::preserveCounters(const Status& previous, Status& current) {
+    current.receivedPackets += previous.receivedPackets;
+    current.transmittedPackets += previous.transmittedPackets;
+    current.receiveErrors += previous.receiveErrors;
+    current.transmitTimeouts += previous.transmitTimeouts;
+}
+
+bool Sx1278Driver::reconfigure(const LoRaProfile::Config& config) {
+    const Status previous = status_;
+    config_ = config;
+    const bool ready = initialize();
+    preserveCounters(previous, status_);
+    if (ready) {
+        status_.consecutiveReceiveErrors = 0;
+    }
+    return ready;
+}
+
 bool Sx1278Driver::recover() {
     const Status previous = status_;
-    const bool ready = begin();
-    status_.receivedPackets += previous.receivedPackets;
-    status_.transmittedPackets += previous.transmittedPackets;
-    status_.receiveErrors += previous.receiveErrors;
-    status_.transmitTimeouts += previous.transmitTimeouts;
+    const bool ready = initialize();
+    preserveCounters(previous, status_);
     if (ready) {
         status_.consecutiveReceiveErrors = 0;
     }
@@ -192,6 +228,10 @@ bool Sx1278Driver::readCurrentRssi(float& rssiDbm) {
 
 const Sx1278Driver::Status& Sx1278Driver::status() const {
     return status_;
+}
+
+const LoRaProfile::Config& Sx1278Driver::config() const {
+    return config_;
 }
 
 bool Sx1278Driver::startReceive() {

@@ -7,6 +7,7 @@
 #include <esp_system.h>
 
 #include "app_config.h"
+#include "app/localization.h"
 #include "app_log.h"
 #include "drivers/display_driver.h"
 #include "drivers/lvgl_port.h"
@@ -60,6 +61,13 @@ bool AppController::begin() {
         static_cast<unsigned>(ESP.getPsramSize() / (1024U * 1024U)),
         psramFound() ? "" : " (not detected)");
 
+    // Load the persistent language before hardware services create their
+    // first user-visible status strings.
+    if (!settings_.begin()) {
+        LOG_E("APP", "Persistent settings unavailable; defaults remain active");
+    }
+    Localization::setLanguage(settings_.viewState().uiLanguage);
+
     if (!Drivers::Display::begin()) {
         halt("Display initialization failed");
     }
@@ -69,6 +77,10 @@ bool AppController::begin() {
     // final Wire configuration selected by XPowersLib.
     if (!power_.begin()) {
         LOG_E("APP", "AXP2101 telemetry unavailable; terminal remains active");
+    }
+
+    if (!time_.begin(millis())) {
+        LOG_E("APP", "RTC unavailable; clock will wait for GPS time");
     }
 
     if (!Drivers::Touch::begin()) {
@@ -82,9 +94,7 @@ bool AppController::begin() {
         LOG_E("APP", "SD card is unavailable; UI and LoRa remain active");
     }
 
-    if (!settings_.begin()) {
-        LOG_E("APP", "Persistent settings unavailable; defaults remain active");
-    }
+    displayPower_.begin(millis(), settings_.viewState(), power_.viewState());
 
     if (!buttons_.begin()) {
         LOG_E("APP", "Onboard BOOT button is unavailable");
@@ -95,7 +105,7 @@ bool AppController::begin() {
     }
 
     // Arduino_GFX/VSPI is initialized before the independent LoRa HSPI bus.
-    if (AppConfig::ENABLE_LORA && !radio_.begin()) {
+    if (AppConfig::ENABLE_LORA && !radio_.begin(settings_.viewState())) {
         LOG_E("APP", "LoRa is unavailable; UI remains active");
     }
 
@@ -115,6 +125,8 @@ bool AppController::begin() {
         digiIgateSettingsSaveThunk,
         this,
         trackerSettingsSaveThunk,
+        this,
+        mapPanThunk,
         this);
     LOG_I(
         "APP",
@@ -128,21 +140,49 @@ void AppController::update() {
     const std::uint32_t now = millis();
     Drivers::LvglPort::update();
     buttons_.update(now);
+    const bool touchActivity = Drivers::LvglPort::consumeTouchActivity();
+    const bool buttonActivity = buttons_.consumePressActivity();
+
+    if (AppConfig::ENABLE_GPS) {
+        gps_.update(now);
+    }
+    time_.update(now, gps_.viewState());
+    if (AppConfig::ENABLE_LORA) {
+        radio_.update(now, settings_.viewState());
+    }
+    power_.update(now);
+
+    const bool wokeFromActivity = displayPower_.update(
+        now,
+        settings_.viewState(),
+        power_.viewState(),
+        touchActivity || buttonActivity);
+    if (wokeFromActivity && buttonActivity) {
+        // A BOOT press used to wake the display must not also transmit a beacon.
+        buttons_.suppressCurrentClick();
+    }
+
     const bool bootBeaconRequested = buttons_.consumeBootClick();
     if (bootBeaconRequested) {
         tracker_.requestImmediateBeacon(now);
     }
 
-    if (AppConfig::ENABLE_GPS) {
-        gps_.update(now);
-    }
-    if (AppConfig::ENABLE_LORA) {
-        radio_.update(now, settings_.viewState());
-    }
     tracker_.update(now, settings_.viewState(), gps_.viewState(), radio_);
     trail_.update(now, settings_.viewState().trailEnabled, gps_.viewState());
-    power_.update(now);
     updateReferencePosition();
+    astronomy_.update(
+        now,
+        time_.viewState().valid,
+        time_.viewState().localYear,
+        time_.viewState().localMonth,
+        time_.viewState().localDay,
+        time_.viewState().utcYear,
+        time_.viewState().utcMonth,
+        time_.viewState().utcDay,
+        time_.viewState().utcHour,
+        time_.viewState().utcMinute,
+        time_.viewState().utcSecond,
+        referencePosition_);
     map_.update(
         now,
         screens_.currentScreen() == App::ScreenId::Map,
@@ -158,6 +198,8 @@ void AppController::update() {
         tracker_.viewState(),
         trail_.viewState(),
         power_.viewState(),
+        time_.viewState(),
+        astronomy_.viewState(),
         radio_.digiIgateViewState(),
         referencePosition_,
         map_.viewState(),
@@ -166,7 +208,10 @@ void AppController::update() {
     const Services::TrackerService::ViewState& trackerState = tracker_.viewState();
     if (trackerState.manualPacketsSent != observedManualPacketsSent_) {
         observedManualPacketsSent_ = trackerState.manualPacketsSent;
-        screens_.setMessage("BOOT: pozicni beacon byl zarazen do TX fronty.");
+        screens_.setMessage(
+            Localization::text(
+                "BOOT: pozicni beacon byl zarazen do TX fronty.",
+                "BOOT: position beacon was queued for transmission."));
     } else if (trackerState.manualBeaconFailures != observedManualBeaconFailures_) {
         observedManualBeaconFailures_ = trackerState.manualBeaconFailures;
         screens_.setMessage(trackerState.statusText);
@@ -180,6 +225,16 @@ void AppController::update() {
 void AppController::commandThunk(Command command, void* context) {
     if (context != nullptr) {
         static_cast<AppController*>(context)->handleCommand(command);
+    }
+}
+
+void AppController::mapPanThunk(
+    std::int16_t deltaX,
+    std::int16_t deltaY,
+    void* context) {
+
+    if (context != nullptr) {
+        static_cast<AppController*>(context)->map_.panByPixels(deltaX, deltaY);
     }
 }
 
@@ -204,6 +259,15 @@ bool AppController::settingsSaveThunk(
     const char* callsign,
     double latitude,
     double longitude,
+    std::uint8_t batteryBrightnessPercent,
+    std::uint16_t displayTimeoutSeconds,
+    UiLanguage uiLanguage,
+    LoRaPreset loraPreset,
+    float loraFrequencyMHz,
+    float loraBandwidthKHz,
+    std::uint8_t loraSpreadingFactor,
+    std::uint8_t loraCodingRate,
+    std::int8_t loraOutputPowerDbm,
     char* errorText,
     std::size_t errorTextCapacity,
     void* context) {
@@ -215,6 +279,15 @@ bool AppController::settingsSaveThunk(
         callsign,
         latitude,
         longitude,
+        batteryBrightnessPercent,
+        displayTimeoutSeconds,
+        uiLanguage,
+        loraPreset,
+        loraFrequencyMHz,
+        loraBandwidthKHz,
+        loraSpreadingFactor,
+        loraCodingRate,
+        loraOutputPowerDbm,
         errorText,
         errorTextCapacity);
 }
@@ -283,10 +356,40 @@ bool AppController::saveSettings(
     const char* callsign,
     double latitude,
     double longitude,
+    std::uint8_t batteryBrightnessPercent,
+    std::uint16_t displayTimeoutSeconds,
+    UiLanguage uiLanguage,
+    LoRaPreset loraPreset,
+    float loraFrequencyMHz,
+    float loraBandwidthKHz,
+    std::uint8_t loraSpreadingFactor,
+    std::uint8_t loraCodingRate,
+    std::int8_t loraOutputPowerDbm,
     char* errorText,
     std::size_t errorTextCapacity) {
 
-    return settings_.save(callsign, latitude, longitude, errorText, errorTextCapacity);
+    const bool saved = settings_.save(
+        callsign,
+        latitude,
+        longitude,
+        batteryBrightnessPercent,
+        displayTimeoutSeconds,
+        uiLanguage,
+        loraPreset,
+        loraFrequencyMHz,
+        loraBandwidthKHz,
+        loraSpreadingFactor,
+        loraCodingRate,
+        loraOutputPowerDbm,
+        errorText,
+        errorTextCapacity);
+    if (saved) {
+        Localization::setLanguage(settings_.viewState().uiLanguage);
+        if (AppConfig::ENABLE_LORA) {
+            radio_.requestConfiguration(settings_.viewState());
+        }
+    }
+    return saved;
 }
 
 bool AppController::saveDigiIgateSettings(
@@ -307,7 +410,9 @@ bool AppController::saveDigiIgateSettings(
         copyError(
             errorText,
             errorTextCapacity,
-            "DIGI/iGate nelze zapnout: radio neni inicializovano.");
+            Localization::text(
+                "DIGI/iGate nelze zapnout: radio neni inicializovano.",
+                "DIGI/iGate cannot be enabled: radio is not initialized."));
         return false;
     }
 
@@ -337,17 +442,33 @@ bool AppController::saveTrackerSettings(
     char* errorText,
     std::size_t errorTextCapacity) {
 
+    const bool english = Localization::isEnglish();
     if (enabled && !radio_.viewState().initialized) {
-        copyError(errorText, errorTextCapacity, "Tracker nelze zapnout: radio neni inicializovano.");
+        copyError(
+            errorText,
+            errorTextCapacity,
+            english
+                ? "Tracker cannot be enabled: radio is not initialized."
+                : "Tracker nelze zapnout: radio neni inicializovano.");
         return false;
     }
     if (enabled && source == TrackerPositionSource::Gps &&
         !gps_.viewState().receiverDetected) {
-        copyError(errorText, errorTextCapacity, "Tracker nelze zapnout: GPS nebyla nalezena.");
+        copyError(
+            errorText,
+            errorTextCapacity,
+            english
+                ? "Tracker cannot be enabled: GPS was not detected."
+                : "Tracker nelze zapnout: GPS nebyla nalezena.");
         return false;
     }
     if (trailEnabled && !Drivers::SdCard::status().mounted) {
-        copyError(errorText, errorTextCapacity, "Stopar nelze zapnout: SD karta neni dostupna.");
+        copyError(
+            errorText,
+            errorTextCapacity,
+            english
+                ? "Trail logger cannot be enabled: SD card is unavailable."
+                : "Stopar nelze zapnout: SD karta neni dostupna.");
         return false;
     }
 
@@ -370,7 +491,10 @@ bool AppController::sendMessage(
     std::size_t errorTextCapacity) {
 
     if (!radio_.viewState().initialized) {
-        copyError(errorText, errorTextCapacity, "Radio neni inicializovano.");
+        copyError(
+            errorText,
+            errorTextCapacity,
+            Localization::text("Radio neni inicializovano.", "Radio is not initialized."));
         return false;
     }
     return radio_.queueMessage(
@@ -384,12 +508,19 @@ bool AppController::sendMessage(
 void AppController::handleCommand(Command command) {
     if (command == Command::SendTestPacket) {
         if (!radio_.viewState().initialized) {
-            screens_.setMessage("Radio neni inicializovano.");
+            screens_.setMessage(Localization::text(
+                "Radio neni inicializovano.",
+                "Radio is not initialized."));
             return;
         }
         const bool started = radio_.sendTestPacket(settings_.viewState().callsign, millis());
-        screens_.setMessage(started ? "Testovaci APRS paket byl zarazen do TX fronty."
-                                    : "Test nelze zaradit: TX fronta je plna.");
+        screens_.setMessage(started
+            ? Localization::text(
+                "Testovaci APRS paket byl zarazen do TX fronty.",
+                "The test APRS packet was queued for transmission.")
+            : Localization::text(
+                "Test nelze zaradit: TX fronta je plna.",
+                "The test packet cannot be queued: the TX queue is full."));
     } else if (command == Command::ToggleTrailPause) {
         char message[128] = {};
         trail_.toggleManualPause(

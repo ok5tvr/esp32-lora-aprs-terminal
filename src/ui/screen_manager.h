@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "app/app_types.h"
+#include "services/astronomy_service.h"
 #include "services/geo_utils.h"
 #include "services/gps_service.h"
 #include "services/map_service.h"
@@ -12,6 +13,7 @@
 #include "services/settings_service.h"
 #include "services/trail_service.h"
 #include "services/tracker_service.h"
+#include "services/time_service.h"
 
 namespace Ui {
 
@@ -27,7 +29,9 @@ public:
         App::DigiIgateSettingsSaveHandler digiIgateSaveHandler,
         void* digiIgateSaveContext,
         App::TrackerSettingsSaveHandler trackerSaveHandler,
-        void* trackerSaveContext);
+        void* trackerSaveContext,
+        App::MapPanHandler mapPanHandler,
+        void* mapPanContext);
     void update(
         std::uint32_t now,
         const Services::RadioService::ViewState& radioState,
@@ -38,6 +42,8 @@ public:
         const Services::TrackerService::ViewState& trackerState,
         const Services::TrailService::ViewState& trailState,
         const Services::PowerService::ViewState& powerState,
+        const Services::TimeService::ViewState& timeState,
+        const Services::AstronomyService::ViewState& astronomyState,
         const Services::DigiIgateService::ViewState& digiIgateState,
         const Services::PositionReference& reference,
         const Services::MapService::ViewState& mapState,
@@ -78,6 +84,8 @@ private:
     Services::TrackerService::ViewState trackerState_;
     Services::TrailService::ViewState trailState_;
     Services::PowerService::ViewState powerState_;
+    Services::TimeService::ViewState timeState_;
+    Services::AstronomyService::ViewState astronomyState_;
     Services::DigiIgateService::ViewState digiIgateState_;
     Services::PositionReference referenceState_;
     const Services::MapService::ViewState* mapState_ = nullptr;
@@ -91,6 +99,7 @@ private:
     std::uint32_t observedStationEvents_ = 0;
     std::uint8_t unreadMessageCount_ = 0;
     std::uint8_t newStationCount_ = 0;
+    App::UiLanguage renderedLanguage_ = App::UiLanguage::Czech;
 };
 
 }  // namespace Ui

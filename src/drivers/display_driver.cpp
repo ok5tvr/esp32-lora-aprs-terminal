@@ -5,7 +5,9 @@
 #include <SPI.h>
 #include <TCA9554.h>
 #include <Wire.h>
+#include <esp_arduino_version.h>
 
+#include "app_config.h"
 #include "app_log.h"
 #include "board_pins.h"
 
@@ -34,6 +36,14 @@ Arduino_ST7796 display(
     BoardPins::LCD_NATIVE_HEIGHT);
 
 TCA9554 ioExpander(BoardPins::TCA9554_ADDRESS);
+std::uint8_t currentBacklightPercent = 100;
+bool backlightPwmReady = false;
+
+std::uint32_t dutyFromPercent(std::uint8_t percent) {
+    const std::uint32_t maxDuty =
+        (1UL << AppConfig::DISPLAY_BACKLIGHT_PWM_RESOLUTION_BITS) - 1UL;
+    return (maxDuty * static_cast<std::uint32_t>(percent) + 50UL) / 100UL;
+}
 
 void resetDisplayAndTouch() {
     ioExpander.pinMode1(BoardPins::TCA_RESET_OUTPUT_0, OUTPUT);
@@ -74,10 +84,55 @@ bool begin() {
     display.fillScreen(RGB565_BLACK);
 
     pinMode(BoardPins::LCD_BACKLIGHT, OUTPUT);
-    digitalWrite(BoardPins::LCD_BACKLIGHT, HIGH);
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+    backlightPwmReady = ledcAttach(
+        BoardPins::LCD_BACKLIGHT,
+        AppConfig::DISPLAY_BACKLIGHT_PWM_FREQUENCY_HZ,
+        AppConfig::DISPLAY_BACKLIGHT_PWM_RESOLUTION_BITS);
+#else
+    constexpr std::uint8_t backlightChannel = 7;
+    ledcSetup(
+        backlightChannel,
+        AppConfig::DISPLAY_BACKLIGHT_PWM_FREQUENCY_HZ,
+        AppConfig::DISPLAY_BACKLIGHT_PWM_RESOLUTION_BITS);
+    ledcAttachPin(BoardPins::LCD_BACKLIGHT, backlightChannel);
+    backlightPwmReady = true;
+#endif
+    if (!backlightPwmReady) {
+        digitalWrite(BoardPins::LCD_BACKLIGHT, HIGH);
+        LOG_E("DISPLAY", "Backlight PWM initialization failed; using full brightness");
+    } else {
+        setBacklightPercent(100);
+    }
 
     LOG_I("DISPLAY", "Ready: %d x %d on VSPI", display.width(), display.height());
     return true;
+}
+
+bool setBacklightPercent(std::uint8_t percent) {
+    if (percent > 100U) {
+        percent = 100U;
+    }
+    if (!backlightPwmReady) {
+        digitalWrite(BoardPins::LCD_BACKLIGHT, percent == 0U ? LOW : HIGH);
+        currentBacklightPercent = percent == 0U ? 0U : 100U;
+        return false;
+    }
+    const std::uint32_t duty = dutyFromPercent(percent);
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+    if (!ledcWrite(BoardPins::LCD_BACKLIGHT, duty)) {
+        return false;
+    }
+#else
+    constexpr std::uint8_t backlightChannel = 7;
+    ledcWrite(backlightChannel, duty);
+#endif
+    currentBacklightPercent = percent;
+    return true;
+}
+
+std::uint8_t backlightPercent() {
+    return currentBacklightPercent;
 }
 
 void drawRgb565Bitmap(

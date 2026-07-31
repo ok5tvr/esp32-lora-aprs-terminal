@@ -31,6 +31,7 @@ void TrackerService::begin() {
     manualBeaconPending_ = false;
     hasTransmitted_ = false;
     lastCourseValid_ = false;
+    language_ = App::UiLanguage::Czech;
 }
 
 void TrackerService::requestImmediateBeacon(std::uint32_t now) {
@@ -42,7 +43,9 @@ void TrackerService::requestImmediateBeacon(std::uint32_t now) {
     manualBeaconPending_ = true;
     manualRequestedAtMs_ = now;
     view_.manualBeaconPending = true;
-    setStatus("BOOT beacon: pozadavek prijat");
+    setStatusLocalized(
+        "BOOT beacon: pozadavek prijat",
+        "BOOT beacon: request accepted");
     LOG_I("TRACKER", "Manual position beacon requested by BOOT button");
 }
 
@@ -52,6 +55,7 @@ void TrackerService::update(
     const GpsService::ViewState& gps,
     RadioService& radio) {
 
+    language_ = settings.uiLanguage;
     if (lastSettingsRevision_ != settings.revision) {
         lastSettingsRevision_ = settings.revision;
         view_.configuredEnabled = settings.trackerEnabled;
@@ -108,17 +112,27 @@ void TrackerService::update(
         view_.nextTransmitSeconds = 0;
 
         if (now - manualRequestedAtMs_ > AppConfig::MANUAL_BEACON_REQUEST_TIMEOUT_MS) {
-            failManualBeacon("BOOT beacon selhal: vyprsel cas cekani");
+            failManualBeaconLocalized(
+                "BOOT beacon selhal: vyprsel cas cekani",
+                "BOOT beacon failed: request timed out");
             return;
         }
         if (!radio.viewState().initialized) {
-            failManualBeacon("BOOT beacon selhal: radio neni inicializovano");
+            failManualBeaconLocalized(
+                "BOOT beacon selhal: radio neni inicializovano",
+                "BOOT beacon failed: radio is not initialized");
             return;
         }
         if (!positionReady) {
-            setStatus(gps.receiverDetected
-                ? "BOOT beacon ceka na GPS fix"
-                : "BOOT beacon ceka: GPS nebyla nalezena");
+            if (gps.receiverDetected) {
+                setStatusLocalized(
+                    "BOOT beacon ceka na GPS fix",
+                    "BOOT beacon is waiting for a GPS fix");
+            } else {
+                setStatusLocalized(
+                    "BOOT beacon ceka: GPS nebyla nalezena",
+                    "BOOT beacon is waiting: GPS not detected");
+            }
             return;
         }
         if (buildAndSend(now, settings, gps, radio)) {
@@ -126,32 +140,50 @@ void TrackerService::update(
             view_.manualBeaconPending = false;
             ++view_.manualPacketsSent;
             ++view_.revision;
-            setStatus(settings.trackerEnabled
-                ? "BOOT beacon zarazen; plan trackeru restartovan"
-                : "BOOT beacon zarazen; tracker zustava vypnut");
+            if (settings.trackerEnabled) {
+                setStatusLocalized(
+                    "BOOT beacon zarazen; plan trackeru restartovan",
+                    "BOOT beacon queued; tracker schedule restarted");
+            } else {
+                setStatusLocalized(
+                    "BOOT beacon zarazen; tracker zustava vypnut",
+                    "BOOT beacon queued; tracker remains off");
+            }
         } else {
-            setStatus("BOOT beacon ceka: odeslani zatim nebylo mozne");
+            setStatusLocalized(
+                "BOOT beacon ceka: odeslani zatim nebylo mozne",
+                "BOOT beacon is waiting: transmission is not possible yet");
         }
         return;
     }
 
     if (!settings.trackerEnabled) {
         view_.nextTransmitSeconds = 0;
-        setStatus("Tracker vypnut; BOOT odesle jednorazovy beacon");
+        setStatusLocalized(
+            "Tracker vypnut; BOOT odesle jednorazovy beacon",
+            "Tracker off; BOOT sends a one-time beacon");
         return;
     }
 
     if (!radio.viewState().initialized) {
         view_.nextTransmitSeconds = 0;
-        setStatus("Tracker ceka: radio neni inicializovano");
+        setStatusLocalized(
+            "Tracker ceka: radio neni inicializovano",
+            "Tracker waiting: radio is not initialized");
         return;
     }
 
     if (!positionReady) {
         view_.nextTransmitSeconds = 0;
-        setStatus(gps.receiverDetected
-            ? "Tracker ceka na platny GPS fix"
-            : "Tracker ceka: GPS nebyla nalezena");
+        if (gps.receiverDetected) {
+            setStatusLocalized(
+                "Tracker ceka na platny GPS fix",
+                "Tracker is waiting for a valid GPS fix");
+        } else {
+            setStatusLocalized(
+                "Tracker ceka: GPS nebyla nalezena",
+                "Tracker waiting: GPS not detected");
+        }
         return;
     }
 
@@ -185,11 +217,19 @@ void TrackerService::update(
 
     if (due) {
         if (buildAndSend(now, settings, gps, radio)) {
-            setStatus(settings.trackerMode == App::TrackerBeaconMode::SmartBeacon
-                ? "Tracker aktivni: SmartBeacon paket zarazen"
-                : "Tracker aktivni: casovy paket zarazen");
+            if (settings.trackerMode == App::TrackerBeaconMode::SmartBeacon) {
+                setStatusLocalized(
+                    "Tracker aktivni: SmartBeacon paket zarazen",
+                    "Tracker active: SmartBeacon packet queued");
+            } else {
+                setStatusLocalized(
+                    "Tracker aktivni: casovy paket zarazen",
+                    "Tracker active: scheduled packet queued");
+            }
         } else {
-            setStatus("Tracker: odeslani se nepodarilo");
+            setStatusLocalized(
+                "Tracker: odeslani se nepodarilo",
+                "Tracker: transmission failed");
         }
         return;
     }
@@ -198,7 +238,9 @@ void TrackerService::update(
     std::snprintf(
         status,
         sizeof(status),
-        "Tracker aktivni: dalsi TX za %u s",
+        language_ == App::UiLanguage::English
+            ? "Tracker active: next TX in %u s"
+            : "Tracker aktivni: dalsi TX za %u s",
         static_cast<unsigned>(view_.nextTransmitSeconds));
     setStatus(status);
 }
@@ -306,11 +348,19 @@ void TrackerService::setStatus(const char* text) {
     }
 }
 
-void TrackerService::failManualBeacon(const char* reason) {
+void TrackerService::setStatusLocalized(const char* czech, const char* english) {
+    setStatus(language_ == App::UiLanguage::English ? english : czech);
+}
+
+void TrackerService::failManualBeaconLocalized(
+    const char* czech,
+    const char* english) {
+
     manualBeaconPending_ = false;
     view_.manualBeaconPending = false;
     ++view_.manualBeaconFailures;
     ++view_.revision;
+    const char* reason = language_ == App::UiLanguage::English ? english : czech;
     setStatus(reason);
     LOG_E("TRACKER", "%s", reason != nullptr ? reason : "Manual beacon failed");
 }

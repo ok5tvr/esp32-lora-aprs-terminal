@@ -9,6 +9,7 @@
 #include <esp_system.h>
 
 #include "app_config.h"
+#include "app/localization.h"
 #include "app_log.h"
 
 namespace Services {
@@ -39,6 +40,14 @@ const char* digiModeText(App::DigiMode mode) {
 bool DigiIgateService::begin() {
     config_ = Config{};
     view_ = ViewState{};
+    copyText(
+        view_.statusText,
+        sizeof(view_.statusText),
+        App::Localization::text("DIGI/iGate vypnuto", "DIGI/iGate disabled"));
+    copyText(
+        view_.serverText,
+        sizeof(view_.serverText),
+        App::Localization::text("APRS-IS nepripojeno", "APRS-IS disconnected"));
     clearDigiQueue();
     clearGateQueue();
     std::fill(std::begin(digiDuplicates_), std::end(digiDuplicates_), DuplicateEntry{});
@@ -346,7 +355,7 @@ void DigiIgateService::ensureAprsIs(std::uint32_t now) {
             config_.aprsIsServer,
             config_.aprsIsPort,
             AppConfig::APRS_IS_CONNECT_TIMEOUT_MS)) {
-        copyText(view_.serverText, sizeof(view_.serverText), "APRS-IS spojeni selhalo");
+        copyText(view_.serverText, sizeof(view_.serverText), App::Localization::text("APRS-IS spojeni selhalo", "APRS-IS connection failed"));
         return;
     }
 
@@ -476,7 +485,7 @@ bool DigiIgateService::sendLogin() {
     if (sent != static_cast<std::size_t>(written)) {
         return false;
     }
-    copyText(view_.serverText, sizeof(view_.serverText), "APRS-IS login odeslan");
+    copyText(view_.serverText, sizeof(view_.serverText), App::Localization::text("APRS-IS login odeslan", "APRS-IS login sent"));
     view_.aprsIsVerified = false;
     view_.loginRejected = false;
     return true;
@@ -583,15 +592,15 @@ void DigiIgateService::refreshView() {
         static_cast<unsigned>(view_.digiQueueDepth));
 
     if (!config_.igateEnabled) {
-        copyText(view_.serverText, sizeof(view_.serverText), "iGate vypnuta (RF -> APRS-IS qAO)");
+        copyText(view_.serverText, sizeof(view_.serverText), App::Localization::text("iGate vypnuta (RF -> APRS-IS qAO)", "iGate disabled (RF -> APRS-IS qAO)"));
     } else if (!view_.wifiConnected) {
-        copyText(view_.serverText, sizeof(view_.serverText), "WiFi se pripojuje...");
+        copyText(view_.serverText, sizeof(view_.serverText), App::Localization::text("WiFi se pripojuje...", "Wi-Fi connecting..."));
     } else if (!view_.aprsIsConnected) {
-        copyText(view_.serverText, sizeof(view_.serverText), "APRS-IS se pripojuje...");
+        copyText(view_.serverText, sizeof(view_.serverText), App::Localization::text("APRS-IS se pripojuje...", "APRS-IS connecting..."));
     } else if (view_.loginRejected) {
-        copyText(view_.serverText, sizeof(view_.serverText), "APRS-IS login UNVERIFIED");
+        copyText(view_.serverText, sizeof(view_.serverText), App::Localization::text("APRS-IS login NEOVEREN", "APRS-IS login UNVERIFIED"));
     } else if (!view_.aprsIsVerified) {
-        copyText(view_.serverText, sizeof(view_.serverText), "APRS-IS ceka na overeni loginu");
+        copyText(view_.serverText, sizeof(view_.serverText), App::Localization::text("APRS-IS ceka na overeni loginu", "APRS-IS waiting for login verification"));
     }
 }
 

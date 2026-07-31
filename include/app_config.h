@@ -6,7 +6,7 @@
 namespace AppConfig {
 
 constexpr char FIRMWARE_NAME[] = "LoRa APRS Terminal";
-constexpr char FIRMWARE_VERSION[] = "2.0.0";
+constexpr char FIRMWARE_VERSION[] = "2.7.1";
 constexpr char BOARD_NAME[] = "Waveshare ESP32-Touch-LCD-3.5";
 
 // Defaults used when no values have yet been saved in NVS.
@@ -51,6 +51,7 @@ constexpr std::uint8_t MAP_DEFAULT_ZOOM = 13;
 constexpr std::uint8_t MAP_MIN_ZOOM = 3;
 constexpr std::uint8_t MAP_MAX_ZOOM = 18;
 constexpr std::uint16_t MAP_RECENTER_THRESHOLD_PIXELS = 64;
+constexpr std::uint8_t MAP_TOUCH_DRAG_THRESHOLD_PIXELS = 6;
 constexpr std::uint16_t MAP_TILE_ROWS_PER_UPDATE = 8;
 constexpr std::size_t MAP_RECENT_TRAIL_POINTS = 64;
 static_assert(MAP_RECENT_TRAIL_POINTS > 1 && MAP_RECENT_TRAIL_POINTS <= 255,
@@ -61,6 +62,18 @@ static_assert(MAP_RECENT_TRAIL_POINTS > 1 && MAP_RECENT_TRAIL_POINTS <= 255,
 constexpr std::uint32_t POWER_POLL_INTERVAL_MS = 2000;
 constexpr std::uint8_t POWER_CRITICAL_PERCENT = 10;
 constexpr std::uint16_t POWER_CRITICAL_VOLTAGE_MV = 3400;
+
+// Display power saving is active only when the terminal is powered from the
+// battery. USB-C always forces full brightness and disables automatic blanking.
+constexpr std::uint8_t DISPLAY_USB_BRIGHTNESS_PERCENT = 100;
+constexpr std::uint8_t DISPLAY_DEFAULT_BATTERY_BRIGHTNESS_PERCENT = 70;
+constexpr std::uint8_t DISPLAY_MIN_BATTERY_BRIGHTNESS_PERCENT = 10;
+constexpr std::uint8_t DISPLAY_MAX_BATTERY_BRIGHTNESS_PERCENT = 100;
+constexpr std::uint16_t DISPLAY_DEFAULT_TIMEOUT_SECONDS = 60;
+constexpr std::uint16_t DISPLAY_DIM_AFTER_SECONDS = 30;
+constexpr std::uint8_t DISPLAY_DIM_BRIGHTNESS_PERCENT = 15;
+constexpr std::uint32_t DISPLAY_BACKLIGHT_PWM_FREQUENCY_HZ = 20000;
+constexpr std::uint8_t DISPLAY_BACKLIGHT_PWM_RESOLUTION_BITS = 8;
 
 constexpr std::uint32_t TRACKER_DEFAULT_INTERVAL_SECONDS = 300;
 constexpr std::uint32_t TRACKER_MIN_INTERVAL_SECONDS = 30;

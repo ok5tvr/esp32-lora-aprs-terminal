@@ -5,8 +5,8 @@
 #include <cstring>
 #include <lvgl.h>
 
-#include "ui/ui_components.h"
 #include "app/tracker_symbols.h"
+#include "ui/ui_components.h"
 
 namespace Ui {
 namespace TrackerScreen {
@@ -38,27 +38,49 @@ App::TrackerPositionSource draftSource = App::TrackerPositionSource::Gps;
 App::TrackerPositionFormat draftFormat = App::TrackerPositionFormat::Uncompressed;
 App::TrackerBeaconMode draftMode = App::TrackerBeaconMode::FixedInterval;
 App::TrackerSymbol draftSymbol = App::TrackerSymbol::Car;
+App::UiLanguage language = App::UiLanguage::Czech;
 std::uint32_t draftInterval = 300;
 std::uint32_t observedSettingsRevision = 0xFFFFFFFFU;
 
+bool english() {
+    return language == App::UiLanguage::English;
+}
+
+const char* text(const char* czech, const char* englishText) {
+    return english() ? englishText : czech;
+}
+
+bool isSuccessMessage(const char* value) {
+    return value != nullptr &&
+        (std::strstr(value, "ulozeno") != nullptr ||
+         std::strstr(value, "saved") != nullptr);
+}
+
 const char* sourceText(App::TrackerPositionSource source) {
-    return source == App::TrackerPositionSource::Gps ? "GPS" : "DEFAULT";
+    return source == App::TrackerPositionSource::Gps
+        ? "GPS"
+        : text("VYCHOZI", "DEFAULT");
 }
 
 const char* formatText(App::TrackerPositionFormat format) {
-    return format == App::TrackerPositionFormat::Compressed ? "KOMPRIMOVANA" : "NORMALNI";
+    if (format == App::TrackerPositionFormat::Compressed) {
+        return text("KOMPRIMOVANA", "COMPRESSED");
+    }
+    return text("NORMALNI", "STANDARD");
 }
 
 const char* modeText(App::TrackerBeaconMode mode) {
-    return mode == App::TrackerBeaconMode::SmartBeacon ? "SMARTBEACON" : "PEVNY CAS";
+    return mode == App::TrackerBeaconMode::SmartBeacon
+        ? "SMARTBEACON"
+        : text("PEVNY CAS", "FIXED TIME");
 }
 
 void refreshDraftLabels() {
     if (valueLabels[0] == nullptr) {
         return;
     }
-    lv_label_set_text(valueLabels[0], draftEnabled ? "ZAPNUT" : "VYPNUT");
-    lv_label_set_text(valueLabels[1], draftTrailEnabled ? "ZAPNUT" : "VYPNUT");
+    lv_label_set_text(valueLabels[0], draftEnabled ? text("ZAPNUT", "ON") : text("VYPNUT", "OFF"));
+    lv_label_set_text(valueLabels[1], draftTrailEnabled ? text("ZAPNUT", "ON") : text("VYPNUT", "OFF"));
     lv_label_set_text(valueLabels[2], sourceText(draftSource));
     lv_label_set_text(valueLabels[3], formatText(draftFormat));
     lv_label_set_text(valueLabels[4], modeText(draftMode));
@@ -68,6 +90,7 @@ void refreshDraftLabels() {
 }
 
 void copyFromSettings(const Services::SettingsService::ViewState& settings) {
+    language = settings.uiLanguage;
     draftEnabled = settings.trackerEnabled;
     draftTrailEnabled = settings.trailEnabled;
     draftSource = settings.trackerSource;
@@ -78,6 +101,9 @@ void copyFromSettings(const Services::SettingsService::ViewState& settings) {
     observedSettingsRevision = settings.revision;
     refreshDraftLabels();
     if (symbolDropdown != nullptr) {
+        lv_dropdown_set_options(
+            symbolDropdown,
+            App::trackerSymbolDropdownOptions(language));
         lv_dropdown_set_selected(
             symbolDropdown,
             static_cast<std::uint16_t>(draftSymbol));
@@ -119,7 +145,9 @@ void fieldClicked(lv_event_t* event) {
             if (draftSource == App::TrackerPositionSource::DefaultPosition &&
                 draftMode == App::TrackerBeaconMode::SmartBeacon) {
                 draftMode = App::TrackerBeaconMode::FixedInterval;
-                setMessage("Defaultni poloha pouziva pevny interval.");
+                setMessage(text(
+                    "Defaultni poloha pouziva pevny interval.",
+                    "The default position uses a fixed interval."));
             }
             break;
         case Field::Format:
@@ -130,7 +158,9 @@ void fieldClicked(lv_event_t* event) {
         case Field::Mode:
             if (draftMode == App::TrackerBeaconMode::FixedInterval) {
                 if (draftSource != App::TrackerPositionSource::Gps) {
-                    setMessage("SmartBeacon lze pouzit jen se zdrojem GPS.");
+                    setMessage(text(
+                        "SmartBeacon lze pouzit jen se zdrojem GPS.",
+                        "SmartBeacon requires the GPS position source."));
                 } else {
                     draftMode = App::TrackerBeaconMode::SmartBeacon;
                 }
@@ -174,7 +204,9 @@ void createSymbolRow() {
     lv_obj_align(titleLabel, LV_ALIGN_TOP_LEFT, 0, 2);
 
     lv_obj_t* hintLabel = lv_label_create(row);
-    lv_label_set_text(hintLabel, "Symbol odesilane polohy");
+    lv_label_set_text(
+        hintLabel,
+        text("Symbol odesilane polohy", "Symbol used for transmitted position"));
     lv_obj_set_style_text_font(hintLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(hintLabel, lv_color_hex(0x92A7C7), 0);
     lv_obj_align(hintLabel, LV_ALIGN_BOTTOM_LEFT, 0, -1);
@@ -185,7 +217,7 @@ void createSymbolRow() {
     lv_obj_set_style_text_font(symbolDropdown, &lv_font_montserrat_14, 0);
     lv_dropdown_set_options(
         symbolDropdown,
-        App::TRACKER_SYMBOL_DROPDOWN_OPTIONS);
+        App::trackerSymbolDropdownOptions(language));
     lv_dropdown_set_selected(symbolDropdown, static_cast<std::uint16_t>(draftSymbol));
     lv_obj_add_event_cb(symbolDropdown, symbolChanged, LV_EVENT_VALUE_CHANGED, nullptr);
 }
@@ -248,6 +280,7 @@ void create(
 
     saveHandler = handler;
     saveContext = context;
+    language = settings.uiLanguage;
     symbolDropdown = nullptr;
     for (lv_obj_t*& valueLabel : valueLabels) {
         valueLabel = nullptr;
@@ -284,27 +317,57 @@ void create(
     lv_obj_set_scroll_dir(content, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(content, LV_SCROLLBAR_MODE_AUTO);
 
-    createFieldRow("Tracker", "Zmena se projevi po ulozeni", Field::Enabled, 0);
-    createFieldRow("Stopar", "Automaticky zaznam GPS trasy na SD", Field::TrailEnabled, 1);
-    createFieldRow("Zdroj pozice", "GPS nebo vychozi pozice", Field::Source, 2);
-    createFieldRow("Format", "Normalni nebo Base-91", Field::Format, 3);
+    createFieldRow(
+        "Tracker",
+        text("Zmena se projevi po ulozeni", "Changes are applied after saving"),
+        Field::Enabled,
+        0);
+    createFieldRow(
+        text("Stopar", "Trail logger"),
+        text("Automaticky zaznam GPS trasy na SD", "Automatically record GPS track to SD"),
+        Field::TrailEnabled,
+        1);
+    createFieldRow(
+        text("Zdroj pozice", "Position source"),
+        text("GPS nebo vychozi pozice", "GPS or default position"),
+        Field::Source,
+        2);
+    createFieldRow(
+        text("Format", "Format"),
+        text("Normalni nebo Base-91", "Standard or Base-91 compressed"),
+        Field::Format,
+        3);
     createSymbolRow();
-    createFieldRow("Planovani", "Pevny interval / SmartBeacon", Field::Mode, 4);
-    createFieldRow("Interval", "Pouziva se v rezimu pevny cas", Field::Interval, 5);
+    createFieldRow(
+        text("Planovani", "Scheduling"),
+        text("Pevny interval / SmartBeacon", "Fixed interval / SmartBeacon"),
+        Field::Mode,
+        4);
+    createFieldRow(
+        "Interval",
+        text("Pouziva se v rezimu pevny cas", "Used in fixed interval mode"),
+        Field::Interval,
+        5);
 
     lv_obj_t* saveButton = lv_btn_create(content);
     lv_obj_set_size(saveButton, 438, 40);
     lv_obj_set_style_bg_color(saveButton, lv_color_hex(0x2764D8), 0);
     lv_obj_add_event_cb(saveButton, saveClicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_t* saveButtonLabel = lv_label_create(saveButton);
-    lv_label_set_text(saveButtonLabel, "Ulozit nastaveni trackeru");
+    lv_label_set_text(
+        saveButtonLabel,
+        text("Ulozit nastaveni trackeru", "Save tracker settings"));
     lv_obj_set_style_text_font(saveButtonLabel, &lv_font_montserrat_16, 0);
     lv_obj_center(saveButtonLabel);
 
     messageLabel = lv_label_create(content);
     lv_obj_set_width(messageLabel, 430);
     lv_label_set_long_mode(messageLabel, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(messageLabel, "Stopare lze pozastavit na jeho samostatne strance.");
+    lv_label_set_text(
+        messageLabel,
+        text(
+            "Stopare lze pozastavit na jeho samostatne strance.",
+            "The trail logger can be paused on its own page."));
     lv_obj_set_style_text_font(messageLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(messageLabel, lv_color_hex(0x92A7C7), 0);
 
@@ -327,18 +390,22 @@ void update(
 
     char gpsText[96];
     if (!gps.receiverDetected) {
-        std::snprintf(gpsText, sizeof(gpsText), "GPS: nenalezena");
+        std::snprintf(
+            gpsText,
+            sizeof(gpsText),
+            "%s",
+            text("GPS: nenalezena", "GPS: not detected"));
     } else if (!gps.hasFix) {
         std::snprintf(
             gpsText,
             sizeof(gpsText),
-            "GPS: bez fixu, sat %u",
+            english() ? "GPS: no fix, sat %u" : "GPS: bez fixu, sat %u",
             static_cast<unsigned>(gps.satellites));
     } else {
         std::snprintf(
             gpsText,
             sizeof(gpsText),
-            "GPS: fix, %.1f km/h, sat %u",
+            english() ? "GPS: fix, %.1f km/h, sat %u" : "GPS: fix, %.1f km/h, sat %u",
             static_cast<double>(gps.speedKmh),
             static_cast<unsigned>(gps.satellites));
     }
@@ -366,7 +433,12 @@ void save() {
         error,
         sizeof(error),
         saveContext);
-    setMessage(result ? "Nastaveni trackeru bylo ulozeno do NVS." : error);
+    setMessage(
+        result
+            ? text(
+                "Nastaveni trackeru bylo ulozeno do NVS.",
+                "Tracker settings were saved to NVS.")
+            : error);
 }
 
 void scroll(int direction) {
@@ -376,14 +448,14 @@ void scroll(int direction) {
     lv_obj_scroll_by(content, 0, direction > 0 ? -47 : 47, LV_ANIM_ON);
 }
 
-void setMessage(const char* text) {
+void setMessage(const char* value) {
     if (messageLabel == nullptr) {
         return;
     }
-    lv_label_set_text(messageLabel, text != nullptr ? text : "");
+    lv_label_set_text(messageLabel, value != nullptr ? value : "");
     lv_obj_set_style_text_color(
         messageLabel,
-        text != nullptr && std::strstr(text, "ulozeno") != nullptr
+        isSuccessMessage(value)
             ? lv_color_hex(0x42D392)
             : lv_color_hex(0xFFB454),
         0);

@@ -1,4 +1,4 @@
-# Offline mapa ve verzi 2.0.0
+# Offline mapa ve verzi 2.1.0
 
 Firmware zobrazuje mapu bez internetu z dlazdic ulozenych na microSD karte.
 Mapova obrazovka je aktivni pouze pri otevrene polozce **Offline mapa**; mimo ni
@@ -9,7 +9,9 @@ se SD dlazdice nectou.
 - standardni Web Mercator / XYZ souradnice dlazdic
 - zoom 3 az 18, vychozi zoom 13
 - stred podle aktualni GPS polohy; bez GPS se pouzije vychozi poloha z Nastaveni
-- automaticke posunuti mapy po pohybu stredu alespon o 64 obrazovych bodu
+- automaticke posunuti mapy po pohybu stredu alespon o 64 obrazovych bodu v rezimu GPS/DEF
+- rucni posouvani mapy tazenim prstu; po tahu se aktivuje rezim `MAN`
+- plynuly nahled pri tahu bez opakovaneho cteni SD; nove dlazdice se nactou az po uvolneni
 - zobrazeni vlastni polohy modrym bodem
 - zobrazeni vsech APRS stanic, objektu a polozek s jejich skutecnym APRS symbolem
 - cervene oramovani entity s emergency priznakem
@@ -18,12 +20,23 @@ se SD dlazdice nectou.
 
 ## Ovladani
 
+- **Tazeni prstem**: rucni posun mapy v libovolnem smeru
 - **Nahoru**: priblizit mapu
 - **Dolu**: oddalit mapu
-- **OK**: okamzite znovu vycentrovat a nacist mapu podle aktualni reference
+- **OK**: opustit rucni rezim, znovu zapnout sledovani GPS/vychozi polohy a vycentrovat mapu
 - **Zpet**: hlavni menu
 
-Mapa zatim nema rucni posouvani prstem. Sleduje GPS nebo vychozi polohu.
+Posun se povazuje za tah az od sesti pixelu. Behem tahu se pouze vizualne
+posune hotovy framebuffer a vsechny prekryvy. Po uvolneni prstu se rozdil
+prevede na novy geograficky stred, rozpracovane cteni stareho vyrezu se zrusi a
+nove dlazdice se nactou progresivne. Tim nevznika zapis na SD ani opakovane
+otvirani souboru pri kazdem dotykovem vzorku.
+
+Stavovy radek pouziva:
+
+- `GPS`: mapa automaticky sleduje platny GPS fix
+- `DEF`: mapa automaticky sleduje vychozi polohu z Nastaveni
+- `MAN`: stred byl zvolen rucnim posunem; nove GPS polohy mapu neposunou
 
 ## Format na SD karte
 

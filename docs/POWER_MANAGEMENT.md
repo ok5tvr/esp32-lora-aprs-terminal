@@ -48,6 +48,20 @@ live current measurement.
 
 ## Main-loop priority
 
-Power telemetry is processed after GPS input, LoRa radio service, APRS tracker
-and Stopar. AXP2101 values are read once every two seconds. No filesystem access
-or blocking delay is used by `PowerService`.
+Power telemetry is processed after GPS input and the LoRa radio service. It is
+polled before display-power policy so USB insertion can wake the backlight; the
+tracker and Stopar continue in the same loop. AXP2101 values are read once every
+two seconds. No filesystem access or blocking delay is used by `PowerService`.
+
+
+## Rizeni podsviceni od verze 2.3.0
+
+- USB-C: 100 % jasu, bez automatickeho vypnuti.
+- Baterie: jas 10-100 % a timeout 0/30/60/120/300 sekund z NVS.
+- Po 30 sekundach bez aktivity se jas snizi na 15 %; po nastavenem timeoutu se podsviceni vypne.
+- Vychozi prubeh je 70 % po dobu 30 s, 15 % mezi 30-60 s a pote 0 %.
+- Pri timeoutu `Nikdy` zustane displej po 30 s ztlumeny na 15 %, ale nevypne se.
+- Vypina se pouze podsviceni LCD; vsechny radio/GPS/sluzby zustavaji aktivni.
+- Prvni dotyk po zhasnuti se pouzije pouze k probuzeni a neni predan LVGL.
+- BOOT stisk pri zhasnuti se spotrebuje jako probuzeni bez rucniho beaconu.
+- Pri chybe AXP2101 je bezpecny fallback plny jas bez automatickeho vypnuti.

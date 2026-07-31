@@ -310,7 +310,7 @@ void create(
 
     selection = selectedIndex % App::MenuModel::count();
     resetScreen();
-    createHeader("LoRa");
+    createClockHeader();
 
     gpsBox = createIndicatorBox(82, LV_SYMBOL_GPS, gpsGlyph);
     messageBox = createIndicatorBox(116, LV_SYMBOL_BELL, messageGlyph);

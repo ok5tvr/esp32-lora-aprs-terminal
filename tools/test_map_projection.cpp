@@ -23,6 +23,16 @@ int main() {
 
     const WorldPixel pilsen = toWorldPixel(49.786333, 13.285000, 13);
     assert(pilsen.valid);
+
+    const GeoCoordinate pilsenRoundTrip = fromWorldPixel(pilsen.x, pilsen.y, 13);
+    assert(pilsenRoundTrip.valid);
+    assert(near(pilsenRoundTrip.latitude, 49.786333, 1e-6));
+    assert(near(pilsenRoundTrip.longitude, 13.285000, 1e-6));
+
+    const GeoCoordinate wrappedCoordinate = fromWorldPixel(pilsen.x + pilsen.worldSize, pilsen.y, 13);
+    assert(wrappedCoordinate.valid);
+    assert(near(wrappedCoordinate.longitude, 13.285000, 1e-6));
+
     const ScreenPoint centered = projectToViewport(
         49.786333, 13.285000, 13, pilsen.x, pilsen.y, 480, 202);
     assert(centered.valid);

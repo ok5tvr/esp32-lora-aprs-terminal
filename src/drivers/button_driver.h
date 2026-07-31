@@ -9,6 +9,8 @@ public:
     bool begin();
     void update(std::uint32_t now);
     bool consumeBootClick();
+    bool consumePressActivity();
+    void suppressCurrentClick();
 
 private:
     bool initialized_ = false;
@@ -16,6 +18,7 @@ private:
     bool stablePressed_ = false;
     bool ignoreUntilReleased_ = false;
     bool bootClickPending_ = false;
+    bool pressActivityPending_ = false;
     std::uint32_t rawChangedAtMs_ = 0;
     std::uint32_t pressedAtMs_ = 0;
     std::uint32_t lastClickAtMs_ = 0;

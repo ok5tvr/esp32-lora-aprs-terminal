@@ -1,10 +1,9 @@
 # Waveshare ESP32-Touch-LCD-3.5 - LoRa APRS terminal
 
-> Version 2.0.0 adds an offline Web Mercator map loaded incrementally from
-> RGB565 XYZ tiles on microSD. It displays the current GPS/default position,
-> the recent Stopar trail and positioned APRS stations, objects and items.
-> Version 1.5.0 RF-channel diagnostics and all earlier tracker, DIGI/iGate,
-> parser, power and navigation functions remain available.
+> Version 2.7.1 extends the fully offline **Astronomie / Astronomy** page with a dynamically drawn Moon phase and current Sun altitude.
+> It calculates Sun and Moon rise/set times and the current Moon phase from
+> GPS/default position and the date maintained by GPS-synchronized RTC.
+
 
 PlatformIO project for the **classic ESP32-D0WDR2-V3** Waveshare board with:
 
@@ -16,6 +15,29 @@ PlatformIO project for the **classic ESP32-D0WDR2-V3** Waveshare board with:
 - LVGL 8.4 user interface
 
 This project is **not** for the ESP32-S3 version of the board.
+
+
+### Astronomy 2.7.1 additions
+
+- Moon phase is rendered directly by LVGL from the calculated elongation; no image files are required.
+- Current Sun altitude is displayed in degrees, including negative values below the horizon.
+- Dynamic astronomy values refresh every five minutes, while date or significant position changes force an immediate recalculation.
+
+## Main menu order in version 2.7.1
+
+1. LoRa APRS
+2. Prijate stanice / Received stations
+3. Zpravy / Messages
+4. Meteostanice / Weather stations
+5. Mapa / Map
+6. Tracker
+7. Stopar / Trail logger
+8. DIGI / iGate
+9. GPS prijimac / GPS receiver
+10. Astronomie / Astronomy
+11. Diagnostika / Diagnostics
+12. Napajeni / Power
+13. Nastaveni / Settings
 
 ## Build
 
@@ -80,8 +102,16 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 - onboard BOOT button short press for an immediate APRS position beacon
 - LoRa status with APRS/decode counters, TX queue depth, drops and recovery history
 - dedicated **Diagnostika** page with a 20-point graph of five-minute background/channel RSSI measurements
-- dedicated **Offline mapa** page with microSD XYZ tiles, own position, recent Stopar trail and APRS entity symbols
+- dedicated **Mapa / Map** page with microSD XYZ tiles, touch-drag panning, own position, recent Stopar trail and APRS entity symbols
 - firmware name and version displayed on the **Nastaveni** page
+- touchscreen LoRa profile configuration with default CZE APRS and a validated custom profile stored in NVS
+- safe SX1278-only reconfiguration after the active TX and central TX queue complete
+- battery-only display brightness and inactivity timeout stored in NVS
+- two-stage battery backlight policy: selected brightness for 30 seconds, then 15 percent, then off at the configured timeout
+- wake-only first touch/BOOT press after full blanking; activity during dimming immediately restores normal brightness
+- USB-C operation fixed at full brightness with dimming and automatic blanking disabled
+- main-menu local `HH:MM` clock loaded from PCF85063 RTC and synchronized from GPS UTC time
+- offline **Astronomie / Astronomy** page with sunrise, sunset, daylight duration, moonrise, moonset, Moon phase, illumination and age
 - fixed eight-entry central TX queue with ACK, message, DIGI, manual beacon, tracker and test priorities
 - automatic RA-02-only recovery after initialization failure, TX timeout or repeated RX errors
 - non-blocking receive and queued test transmission
@@ -105,6 +135,7 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 - UART2 NMEA diagnostics with traffic, packet/checksum, fix, UTC, speed, course, locator and the latest complete received sentence
 - main-menu GPS/default Maidenhead locator and compact GPS/message/new-station/tracker/Stopar/digipeater/iGate status indicators
 - persistent APRS tracker with normal/compressed position, selectable APRS symbol and fixed/SmartBeacon scheduling
+- persistent Czech/English language for the complete UI, applied immediately without restart
 - independent **Stopar** GPS route logger enabled from the Tracker page
 - read-only AXP2101 battery, USB-C, charger and PMIC-temperature telemetry
 - permanent header summary with battery percentage, voltage and battery/charge/USB symbol
@@ -120,7 +151,7 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 
 ## Configuration
 
-Radio and board constants remain in:
+Board constants and fixed packet-format constants remain in:
 
 ```text
 include/app_config.h
@@ -128,15 +159,21 @@ include/lora_profile.h
 include/board_pins.h
 ```
 
-The operational callsign and default latitude/longitude are edited on the
-**Nastaveni** screen. Touching a field opens an LVGL keyboard. The values are
-validated and stored in ESP32 NVS, so they survive reset and power loss.
-Initial defaults are:
+The operational callsign, default latitude/longitude, complete UI language, display
+policy and LoRa profile are edited on the **Nastaveni / Settings** screen. Touching a numeric/text field
+opens an LVGL keyboard. Values are validated and stored in ESP32 NVS, so they
+survive reset and power loss. Initial defaults are:
 
 ```text
-CALL:      OK5TVR-15
-latitude:  49.786333
-longitude: 13.285000
+CALL:       OK5TVR-15
+latitude:   49.786333
+longitude:  13.285000
+LoRa:       CZE APRS
+frequency:  433.775 MHz
+bandwidth:  125 kHz
+SF / CR:    SF12 / 4/5
+TX power:   10 dBm
+UI language: Cestina
 ```
 
 The stored callsign is used by the test transmission. The default position is
@@ -144,13 +181,70 @@ prepared for the later local GPS/beacon module and can already be changed from
 the touchscreen.
 
 
+
+
+## Complete UI language in version 2.6.0
+
+The **Nastaveni / Settings** page contains a **Jazyk rozhrani / Interface language**
+selector with `Cestina / Czech` and `English`. The choice remains stored under the
+backward-compatible NVS key `trklang`; missing or invalid values fall back to Czech.
+
+The selected language is loaded before hardware and services are initialized. Changing
+it and saving settings rebuilds the active screen immediately, so no restart is needed.
+The translation covers:
+
+- all main-menu names and descriptions
+- Settings, Tracker and DIGI/iGate editors, hints, validation and save messages
+- GPS, LoRa, diagnostics, power and Trail logger states and errors
+- messages, heard stations, navigation, weather and detail pages
+- offline-map status, missing-tile and SD-card messages
+- service-generated runtime messages shown in the UI
+
+APRS frames, callsigns, NMEA sentences, LoRa abbreviations, units and protocol/server
+replies remain unchanged because they are protocol data rather than UI text. New Trail
+logger files use a localized first header line. The built-in Montserrat font currently
+uses ASCII labels, therefore Czech strings are displayed without diacritics.
+
+## LoRa module settings in version 2.4.0
+
+The **Nastaveni** page contains a new **LoRa modul** section. The default
+`CZE APRS` profile is intentionally identical to the previously hard-coded
+configuration:
+
+```text
+433.775 MHz | BW 125 kHz | SF12 | CR 4/5 | TX 10 dBm
+```
+
+Selecting `Vlastni` enables these controls:
+
+- frequency from 410.000 through 525.000 MHz
+- bandwidth 62.5, 125, 250 or 500 kHz
+- spreading factor SF7 through SF12
+- coding rate 4/5 through 4/8
+- output power 2, 5, 10, 14 or 17 dBm
+
+The sync word remains `0x12`, preamble length remains 8, the explicit LoRa
+header stays enabled and RadioLib payload CRC stays disabled. These fixed values
+preserve compatibility with the terminal packet format.
+
+Saving a changed profile does not interrupt an active transmission. The new
+configuration is marked `CEKA` on the **LoRa APRS** page until the current TX and
+the central TX queue are empty. The firmware then reinitializes only the SX1278,
+preserves lifetime RX/TX/error counters and resumes continuous reception. GPS,
+LVGL, SD logging, Stopar, map state, DIGI and iGate are not restarted.
+
 ## Main-header indicators in version 1.2.0
 
 The main screen header is arranged as:
 
 ```text
-LoRa  [GPS] [message] [station] [car] [save] [digi] [L&]  74%  3,91V  [battery]
+10:18  [GPS] [message] [station] [car] [save] [digi] [L&]  74%  3,91V  [battery]
 ```
+
+The clock is read from the onboard PCF85063 at startup and is corrected from
+valid GPS UTC date/time. Green digits indicate a current GPS reference; white
+digits indicate RTC/holdover operation. Displayed time is local CET/CEST with
+the European daylight-saving transition applied automatically.
 
 The GPS/default Maidenhead locator remains visible in the lower status area so
 that the power summary does not overlap the existing service indicators.
@@ -206,7 +300,44 @@ The reference is the live GPS fix when available, otherwise the configured
 default position. The displayed direction is a geographic bearing; the board
 has no enabled compass, so it is not a turn-by-turn heading indicator.
 
-## Offline map in version 2.0.0
+## Battery display power saving and RTC clock in version 2.3.0
+
+The **Nastaveni** page contains a battery brightness slider (10-100 percent)
+and an inactivity timeout selector: never, 30 seconds, 60 seconds, 2 minutes or
+5 minutes. Defaults are 70 percent and 60 seconds. Both values are stored in
+NVS and take effect immediately after saving.
+
+Power-source behavior is deliberate:
+
+- USB-C connected: backlight is forced to 100 percent and never dims or blanks
+- battery only: configured brightness is used for the first 30 seconds, then the backlight is reduced to 15 percent, and it blanks at the configured inactivity timeout
+- with the default 70 percent / 60 second setting the sequence is 70 % -> 15 % -> off
+- PMIC unavailable: the fail-safe behavior is full brightness with no dimming or blanking
+
+Blanking switches only the LCD backlight off. GPS, LoRa RX/TX, tracker, DIGI,
+iGate, Stopar, map loading and logging continue normally. The touch controller
+remains active. The first touch wakes the display and is consumed until finger
+release, preventing an accidental UI action. A BOOT press while blanked also
+wakes the display and is consumed, so it does not send an immediate beacon.
+
+The backlight on GPIO25 is driven by 20 kHz 8-bit PWM. No CPU-frequency scaling
+or radio duty-cycle reduction is used, so USB/full-performance operation and RF
+timing are unchanged.
+
+## RTC and GPS time service in version 2.3.0
+
+The onboard PCF85063 is accessed on the shared I2C bus at address `0x51`.
+At startup the firmware reads UTC date/time from the RTC. As soon as the
+ATGM336H supplies valid NMEA date and time, GPS becomes the reference and the
+RTC is updated. The normal six-hour correction interval avoids unnecessary I2C
+writes; an unsuccessful initial write is retried after one minute.
+
+The RTC stores UTC. The main-menu clock converts UTC to Czech local time using
+CET/CEST rules, including the last-Sunday transitions in March and October.
+If neither RTC nor GPS contains a valid date/time, the header displays `--:--`.
+Detailed behavior is described in `docs/TIME_SERVICE.md`.
+
+## Offline map in version 2.1.0
 
 The **Offline mapa** screen reads standard Web Mercator XYZ tiles from the
 microSD card. To keep the embedded renderer small and deterministic, each tile
@@ -216,11 +347,14 @@ is stored as a raw 256 x 256 little-endian RGB565 file:
 /MAP/<zoom>/<x>/<y>.rgb
 ```
 
-The map follows the current GPS fix, or the configured default position when a
-fix is unavailable. It displays a blue own-position marker, up to 15 positioned
-APRS stations/objects/items with their full APRS symbols, emergency highlighting
-and an orange polyline containing the latest 64 Stopar points. Up/Down changes
-zoom from 3 through 18 and OK forces recentering.
+The map initially follows the current GPS fix, or the configured default
+position when a fix is unavailable. It displays a blue own-position marker, up
+to 15 positioned APRS stations/objects/items with their full APRS symbols,
+emergency highlighting and an orange polyline containing the latest 64 Stopar
+points. Dragging the map with one finger enters manual mode (`MAN`). The already
+rendered map and overlays follow the finger immediately, while the new tiles are
+requested only after release. Up/Down changes zoom from 3 through 18 and OK
+returns to GPS/default following and recenters the map.
 
 Tile reads are incremental: at most eight rows of one tile are read in a main
 loop pass, after GPS, LoRa RX/TX, tracker and Stopar processing. The 480 x 202

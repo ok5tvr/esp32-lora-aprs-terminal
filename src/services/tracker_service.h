@@ -28,8 +28,8 @@ public:
         std::uint32_t manualBeaconFailures = 0;
         std::uint32_t lastTransmitAtMs = 0;
         std::uint32_t revision = 0;
-        char statusText[96] = "Tracker vypnut";
-        char lastFrame[192] = "Zatim nebyla odeslana poloha.";
+        char statusText[96] = "--";
+        char lastFrame[192] = "--";
     };
 
     void begin();
@@ -54,7 +54,8 @@ private:
         const GpsService::ViewState& gps,
         RadioService& radio);
     void setStatus(const char* text);
-    void failManualBeacon(const char* reason);
+    void setStatusLocalized(const char* czech, const char* english);
+    void failManualBeaconLocalized(const char* czech, const char* english);
 
     ViewState view_;
     std::uint32_t lastSettingsRevision_ = 0xFFFFFFFFU;
@@ -62,6 +63,7 @@ private:
     std::uint32_t manualRequestedAtMs_ = 0;
     bool manualBeaconPending_ = false;
     bool hasTransmitted_ = false;
+    App::UiLanguage language_ = App::UiLanguage::Czech;
     float lastCourseAtTransmit_ = 0.0F;
     bool lastCourseValid_ = false;
 };

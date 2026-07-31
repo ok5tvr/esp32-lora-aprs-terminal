@@ -1,6 +1,6 @@
 # Main header indicators
 
-Firmware 1.1.0 keeps the compact `LoRa` header and displays seven status groups before the Maidenhead locator.
+Firmware 2.3.0 replaces the compact `LoRa` text in the main-menu header with local `HH:MM` time and keeps the seven service status groups before the power summary.
 
 ## GPS
 
@@ -52,3 +52,11 @@ The gateway diamond with an `L` overlay is the same `L&` rendering used for LoRa
 - grey: receive-only iGate disabled
 - amber: iGate enabled but Wi-Fi/APRS-IS login is not yet verified
 - green: APRS-IS login verified and RF-to-IS gating is operational
+
+
+## Hodiny od verze 2.3.0
+
+- `--:--`: RTC ani GPS zatim neposkytly platne datum a cas.
+- bile cislice: cas pochazi z PCF85063 RTC nebo z kratkodobeho holdoveru.
+- zelene cislice: aktualni GPS datum a UTC cas jsou platne a pouzivaji se jako reference.
+- RTC je ulozeno v UTC; zobrazeni pouziva CET/CEST a evropska pravidla letniho casu.

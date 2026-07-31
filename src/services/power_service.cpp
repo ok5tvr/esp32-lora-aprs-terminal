@@ -11,6 +11,7 @@
 #include <XPowersLib.h>
 
 #include "app_config.h"
+#include "app/localization.h"
 #include "app_log.h"
 #include "board_pins.h"
 
@@ -22,14 +23,21 @@ bool pmuReady = false;
 
 const char* chargerStateText(PowerService::ChargerState state) {
     switch (state) {
-        case PowerService::ChargerState::TriCharge: return "tri-charge";
-        case PowerService::ChargerState::PreCharge: return "prednabijeni";
-        case PowerService::ChargerState::ConstantCurrent: return "konstantni proud";
-        case PowerService::ChargerState::ConstantVoltage: return "konstantni napeti";
-        case PowerService::ChargerState::Done: return "nabijeni dokonceno";
-        case PowerService::ChargerState::Stopped: return "nenabiji";
+        case PowerService::ChargerState::TriCharge:
+            return App::Localization::text("tri-charge", "tri-charge");
+        case PowerService::ChargerState::PreCharge:
+            return App::Localization::text("prednabijeni", "pre-charge");
+        case PowerService::ChargerState::ConstantCurrent:
+            return App::Localization::text("konstantni proud", "constant current");
+        case PowerService::ChargerState::ConstantVoltage:
+            return App::Localization::text("konstantni napeti", "constant voltage");
+        case PowerService::ChargerState::Done:
+            return App::Localization::text("nabijeni dokonceno", "charging complete");
+        case PowerService::ChargerState::Stopped:
+            return App::Localization::text("nenabiji", "not charging");
         case PowerService::ChargerState::Unknown:
-        default: return "neznamy stav";
+        default:
+            return App::Localization::text("neznamy stav", "unknown state");
     }
 }
 
@@ -83,6 +91,7 @@ void copyText(char* destination, std::size_t capacity, const char* text) {
 
 bool PowerService::begin() {
     view_ = ViewState{};
+    localizationRevision_ = App::Localization::revision();
 
     pmuReady = pmu.begin(
         Wire,
@@ -90,7 +99,7 @@ bool PowerService::begin() {
         BoardPins::I2C_SDA,
         BoardPins::I2C_SCL);
     if (!pmuReady) {
-        copyText(view_.lastEvent, sizeof(view_.lastEvent), "AXP2101 nebyl nalezen");
+        copyText(view_.lastEvent, sizeof(view_.lastEvent), App::Localization::text("AXP2101 nebyl nalezen", "AXP2101 was not detected"));
         LOG_E("POWER", "AXP2101 is unavailable on I2C");
         return false;
     }
@@ -117,6 +126,24 @@ bool PowerService::begin() {
 }
 
 void PowerService::update(std::uint32_t now) {
+    const std::uint32_t currentLocalizationRevision = App::Localization::revision();
+    if (localizationRevision_ != currentLocalizationRevision) {
+        localizationRevision_ = currentLocalizationRevision;
+        if (pmuReady) {
+            readState(true);
+            lastPollAt_ = now;
+        } else {
+            copyText(
+                view_.lastEvent,
+                sizeof(view_.lastEvent),
+                App::Localization::text(
+                    "AXP2101 nebyl nalezen",
+                    "AXP2101 was not detected"));
+            ++view_.revision;
+        }
+        return;
+    }
+
     if (!pmuReady || now - lastPollAt_ < AppConfig::POWER_POLL_INTERVAL_MS) {
         return;
     }
@@ -163,15 +190,15 @@ void PowerService::readState(bool firstRead) {
         (percentCritical || voltageCritical);
 
     if (view_.charging) {
-        copyText(view_.operatingText, sizeof(view_.operatingText), "nabijeni");
+        copyText(view_.operatingText, sizeof(view_.operatingText), App::Localization::text("nabijeni", "charging"));
     } else if (view_.discharging) {
-        copyText(view_.operatingText, sizeof(view_.operatingText), "vybijeni");
+        copyText(view_.operatingText, sizeof(view_.operatingText), App::Localization::text("vybijeni", "discharging"));
     } else if (view_.vbusConnected) {
-        copyText(view_.operatingText, sizeof(view_.operatingText), "napajeni z USB-C");
+        copyText(view_.operatingText, sizeof(view_.operatingText), App::Localization::text("napajeni z USB-C", "powered by USB-C"));
     } else if (view_.standby) {
-        copyText(view_.operatingText, sizeof(view_.operatingText), "pohotovost");
+        copyText(view_.operatingText, sizeof(view_.operatingText), App::Localization::text("pohotovost", "standby"));
     } else {
-        copyText(view_.operatingText, sizeof(view_.operatingText), "neznamy stav");
+        copyText(view_.operatingText, sizeof(view_.operatingText), App::Localization::text("neznamy stav", "unknown state"));
     }
     copyText(
         view_.chargerText,
@@ -185,34 +212,34 @@ void PowerService::readState(bool firstRead) {
 void PowerService::updateLastEvent(const ViewState& previous, bool firstRead) {
     if (firstRead) {
         if (view_.vbusConnected) {
-            copyText(view_.lastEvent, sizeof(view_.lastEvent), "USB-C je pripojeno");
+            copyText(view_.lastEvent, sizeof(view_.lastEvent), App::Localization::text("USB-C je pripojeno", "USB-C is connected"));
         } else if (view_.batteryConnected) {
-            copyText(view_.lastEvent, sizeof(view_.lastEvent), "Provoz z akumulatoru");
+            copyText(view_.lastEvent, sizeof(view_.lastEvent), App::Localization::text("Provoz z akumulatoru", "Running on battery"));
         } else {
-            copyText(view_.lastEvent, sizeof(view_.lastEvent), "Bez akumulatoru a USB-C");
+            copyText(view_.lastEvent, sizeof(view_.lastEvent), App::Localization::text("Bez akumulatoru a USB-C", "No battery or USB-C power"));
         }
         return;
     }
 
     if (!previous.vbusConnected && view_.vbusConnected) {
-        copyText(view_.lastEvent, sizeof(view_.lastEvent), "Pripojeno USB-C");
+        copyText(view_.lastEvent, sizeof(view_.lastEvent), App::Localization::text("Pripojeno USB-C", "USB-C connected"));
     } else if (previous.vbusConnected && !view_.vbusConnected) {
-        copyText(view_.lastEvent, sizeof(view_.lastEvent), "Odpojeno USB-C");
+        copyText(view_.lastEvent, sizeof(view_.lastEvent), App::Localization::text("Odpojeno USB-C", "USB-C disconnected"));
     } else if (!previous.batteryConnected && view_.batteryConnected) {
-        copyText(view_.lastEvent, sizeof(view_.lastEvent), "Pripojen akumulator");
+        copyText(view_.lastEvent, sizeof(view_.lastEvent), App::Localization::text("Pripojen akumulator", "Battery connected"));
     } else if (previous.batteryConnected && !view_.batteryConnected) {
-        copyText(view_.lastEvent, sizeof(view_.lastEvent), "Odpojen akumulator");
+        copyText(view_.lastEvent, sizeof(view_.lastEvent), App::Localization::text("Odpojen akumulator", "Battery disconnected"));
     } else if (!previous.charging && view_.charging) {
-        copyText(view_.lastEvent, sizeof(view_.lastEvent), "Zahajeno nabijeni");
+        copyText(view_.lastEvent, sizeof(view_.lastEvent), App::Localization::text("Zahajeno nabijeni", "Charging started"));
     } else if (previous.charging && !view_.charging) {
         copyText(
             view_.lastEvent,
             sizeof(view_.lastEvent),
             view_.chargerState == ChargerState::Done
-                ? "Nabijeni dokonceno"
-                : "Nabijeni preruseno");
+                ? App::Localization::text("Nabijeni dokonceno", "Charging complete")
+                : App::Localization::text("Nabijeni preruseno", "Charging interrupted"));
     } else if (!previous.criticalBattery && view_.criticalBattery) {
-        copyText(view_.lastEvent, sizeof(view_.lastEvent), "Kriticky stav baterie");
+        copyText(view_.lastEvent, sizeof(view_.lastEvent), App::Localization::text("Kriticky stav baterie", "Critical battery level"));
     }
 }
 

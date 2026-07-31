@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/app_types.h"
 #include "services/geo_utils.h"
 #include "services/map_service.h"
 #include "services/station_store.h"
@@ -7,6 +8,7 @@
 
 namespace Ui::MapScreen {
 
+void setPanHandler(App::MapPanHandler handler, void* context);
 void create();
 void update(
     const Services::MapService::ViewState& mapState,
