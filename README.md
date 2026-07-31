@@ -62,11 +62,11 @@ Connect a 433 MHz antenna before transmitting. Place 100 nF, 10 uF and 47-100 uF
 
 GPIO2 is a boot-strapping pin. Add a 10 kOhm pulldown from GPIO2 to GND so RA-02 DIO0 remains low during reset and firmware upload. Do not enable the onboard I2S audio interface because GPIO2 and GPIO4 are reused by LoRa DIO0 and GPS RX.
 
-### HSPI - external RA-02
+### GPS
 
-| GPS | GPIO |
-| TX | GPIO4 |
-| VCC | 3.3 V only |
+| GPS | GPIO |<br>
+| TX | GPIO4 |<br>
+| VCC | 3.3 V only |<br>
 | GND | GND |
 
 ## Memory layout
