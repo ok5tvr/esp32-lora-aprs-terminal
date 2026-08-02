@@ -10,6 +10,7 @@
 #include "services/geo_utils.h"
 #include "services/gps_service.h"
 #include "services/map_service.h"
+#include "services/ota_service.h"
 #include "services/power_service.h"
 #include "services/radio_service.h"
 #include "services/settings_service.h"
@@ -41,6 +42,7 @@ private:
         std::uint8_t batteryBrightnessPercent,
         std::uint16_t displayTimeoutSeconds,
         UiLanguage uiLanguage,
+        bool otaEnabled,
         LoRaPreset loraPreset,
         float loraFrequencyMHz,
         float loraBandwidthKHz,
@@ -88,6 +90,7 @@ private:
         std::uint8_t batteryBrightnessPercent,
         std::uint16_t displayTimeoutSeconds,
         UiLanguage uiLanguage,
+        bool otaEnabled,
         LoRaPreset loraPreset,
         float loraFrequencyMHz,
         float loraBandwidthKHz,
@@ -131,6 +134,7 @@ private:
     Services::DisplayPowerService displayPower_;
     Services::RadioService radio_;
     Services::MapService map_;
+    Services::OtaService ota_;
     Services::TrackerService tracker_;
     Services::TrailService trail_;
     Services::PositionReference referencePosition_;

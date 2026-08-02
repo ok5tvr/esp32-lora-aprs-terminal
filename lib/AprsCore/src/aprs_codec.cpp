@@ -666,6 +666,114 @@ bool parseItem(
     return true;
 }
 
+bool pathTokenEquals(
+    const std::uint8_t* token,
+    std::size_t length,
+    const char* expected) {
+
+    if (token == nullptr || expected == nullptr) {
+        return false;
+    }
+    if (length > 0 && token[length - 1] == '*') {
+        --length;
+    }
+    if (std::strlen(expected) != length) {
+        return false;
+    }
+    for (std::size_t index = 0; index < length; ++index) {
+        char value = static_cast<char>(token[index]);
+        if (value >= 'a' && value <= 'z') {
+            value = static_cast<char>(value - 'a' + 'A');
+        }
+        char expectedValue = expected[index];
+        if (expectedValue >= 'a' && expectedValue <= 'z') {
+            expectedValue = static_cast<char>(expectedValue - 'a' + 'A');
+        }
+        if (value != expectedValue) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool isInternetPathToken(const std::uint8_t* token, std::size_t length) {
+    std::size_t normalizedLength = length;
+    if (normalizedLength > 0 && token[normalizedLength - 1] == '*') {
+        --normalizedLength;
+    }
+    if (normalizedLength >= 2) {
+        char first = static_cast<char>(token[0]);
+        char second = static_cast<char>(token[1]);
+        if (first >= 'a' && first <= 'z') first = static_cast<char>(first - 'a' + 'A');
+        if (second >= 'a' && second <= 'z') second = static_cast<char>(second - 'a' + 'A');
+        if (first == 'Q' && second == 'A') {
+            return true;
+        }
+    }
+    return pathTokenEquals(token, length, "TCPIP") ||
+        pathTokenEquals(token, length, "TCPXX") ||
+        pathTokenEquals(token, length, "NOGATE") ||
+        pathTokenEquals(token, length, "RFONLY");
+}
+
+void parsePathData(
+    const std::uint8_t* tnc2,
+    std::size_t length,
+    PathData& path) {
+
+    path = PathData{};
+    if (tnc2 == nullptr || length == 0) {
+        return;
+    }
+
+    const std::uint8_t* greater = findByte(tnc2, length, '>');
+    const std::uint8_t* colon = findByte(tnc2, length, ':');
+    if (greater == nullptr || colon == nullptr || greater >= colon) {
+        return;
+    }
+
+    const std::uint8_t* headerBegin = greater + 1;
+    const std::size_t headerLength = static_cast<std::size_t>(colon - headerBegin);
+    const std::uint8_t* firstComma = findByte(headerBegin, headerLength, ',');
+    path.valid = true;
+    path.direct = true;
+    if (firstComma == nullptr || firstComma + 1 >= colon) {
+        return;
+    }
+
+    const std::uint8_t* pathBegin = firstComma + 1;
+    copyText(
+        path.path,
+        sizeof(path.path),
+        pathBegin,
+        static_cast<std::size_t>(colon - pathBegin),
+        false);
+
+    const std::uint8_t* tokenBegin = pathBegin;
+    while (tokenBegin < colon) {
+        const std::uint8_t* tokenEnd = tokenBegin;
+        while (tokenEnd < colon && *tokenEnd != ',') {
+            ++tokenEnd;
+        }
+        const std::size_t tokenLength = static_cast<std::size_t>(tokenEnd - tokenBegin);
+        const bool used = tokenLength > 0 && tokenBegin[tokenLength - 1] == '*';
+        if (used && !isInternetPathToken(tokenBegin, tokenLength)) {
+            if (path.digipeaterHops < 255U) {
+                ++path.digipeaterHops;
+            }
+            std::size_t callsignLength = tokenLength - 1;
+            copyText(
+                path.lastDigipeater,
+                sizeof(path.lastDigipeater),
+                tokenBegin,
+                callsignLength,
+                false);
+        }
+        tokenBegin = tokenEnd < colon ? tokenEnd + 1 : colon;
+    }
+    path.direct = path.digipeaterHops == 0;
+}
+
 bool parseTnc2Internal(
     const std::uint8_t* tnc2,
     std::size_t length,
@@ -700,6 +808,7 @@ bool parseTnc2Internal(
         tnc2,
         sourceLength,
         false);
+    parsePathData(tnc2, length, parsed.path);
 
     const std::uint8_t* information = informationSeparator + 1;
     const std::size_t informationLength =

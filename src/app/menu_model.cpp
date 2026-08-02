@@ -18,7 +18,7 @@ constexpr MenuItem ITEMS_CZECH[ITEM_COUNT] = {
     {"GPS prijimac", "NMEA diagnostika, poloha, rychlost, smer a lokator.", ScreenId::GpsStatus},
     {"Astronomie", "Vychod a zapad Slunce a Mesice, faze Mesice.", ScreenId::Astronomy},
     {"Diagnostika", "Historie aktualniho RSSI na LoRa frekvenci.", ScreenId::Diagnostics},
-    {"Napajeni", "AXP2101: baterie, USB-C, nabijeni a teplota PMIC.", ScreenId::Power},
+    {"Napajeni", "AXP2101: baterie, USB-C, nabijeni a 24h historie.", ScreenId::Power},
     {"Nastaveni", "CALL, poloha, displej, jazyk a LoRa profil.", ScreenId::Settings}
 };
 
@@ -34,7 +34,7 @@ constexpr MenuItem ITEMS_ENGLISH[ITEM_COUNT] = {
     {"GPS receiver", "NMEA diagnostics, position, speed, course and locator.", ScreenId::GpsStatus},
     {"Astronomy", "Sunrise, sunset, moonrise, moonset and Moon phase.", ScreenId::Astronomy},
     {"Diagnostics", "Current RSSI history on the LoRa frequency.", ScreenId::Diagnostics},
-    {"Power", "AXP2101 battery, USB-C, charging and PMIC temperature.", ScreenId::Power},
+    {"Power", "AXP2101 battery, USB-C, charging and 24-hour history.", ScreenId::Power},
     {"Settings", "Callsign, position, display, language and LoRa profile.", ScreenId::Settings}
 };
 

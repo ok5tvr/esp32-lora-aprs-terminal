@@ -12,6 +12,7 @@ constexpr std::size_t MAX_ENTITY_NAME_LENGTH = 15;
 constexpr std::size_t MAX_MESSAGE_ADDRESS_LENGTH = 9;
 constexpr std::size_t MAX_MESSAGE_TEXT_LENGTH = 67;
 constexpr std::size_t MAX_MESSAGE_ID_LENGTH = 5;
+constexpr std::size_t MAX_PATH_LENGTH = 192;
 
 enum class EntityType : std::uint8_t {
     Station,
@@ -93,6 +94,14 @@ struct FrequencyData {
     float offsetMhz = 0.0F;
 };
 
+struct PathData {
+    bool valid = false;
+    bool direct = true;
+    std::uint8_t digipeaterHops = 0;
+    char path[MAX_PATH_LENGTH + 1] = {};
+    char lastDigipeater[MAX_SOURCE_CALL_LENGTH + 1] = {};
+};
+
 struct ParsedFrame {
     bool valid = false;
     bool hasPosition = false;
@@ -110,6 +119,7 @@ struct ParsedFrame {
     TelemetryData telemetry;
     PhgData phg;
     FrequencyData frequency;
+    PathData path;
 };
 
 bool encodeTnc2(

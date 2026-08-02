@@ -114,6 +114,9 @@ bool AppController::begin() {
     if (!map_.begin()) {
         LOG_E("APP", "Offline map framebuffer unavailable");
     }
+    if (!ota_.begin()) {
+        LOG_E("APP", "OTA web service initialization failed");
+    }
     updateReferencePosition();
     screens_.begin(
         commandThunk,
@@ -150,6 +153,9 @@ void AppController::update() {
     if (AppConfig::ENABLE_LORA) {
         radio_.update(now, settings_.viewState());
     }
+    // Run after DIGI/iGate networking so OTA can restore AP+STA mode if the
+    // station service changed the shared ESP32 Wi-Fi mode in this iteration.
+    ota_.update(now, settings_.viewState());
     power_.update(now);
 
     const bool wokeFromActivity = displayPower_.update(
@@ -262,6 +268,7 @@ bool AppController::settingsSaveThunk(
     std::uint8_t batteryBrightnessPercent,
     std::uint16_t displayTimeoutSeconds,
     UiLanguage uiLanguage,
+    bool otaEnabled,
     LoRaPreset loraPreset,
     float loraFrequencyMHz,
     float loraBandwidthKHz,
@@ -282,6 +289,7 @@ bool AppController::settingsSaveThunk(
         batteryBrightnessPercent,
         displayTimeoutSeconds,
         uiLanguage,
+        otaEnabled,
         loraPreset,
         loraFrequencyMHz,
         loraBandwidthKHz,
@@ -359,6 +367,7 @@ bool AppController::saveSettings(
     std::uint8_t batteryBrightnessPercent,
     std::uint16_t displayTimeoutSeconds,
     UiLanguage uiLanguage,
+    bool otaEnabled,
     LoRaPreset loraPreset,
     float loraFrequencyMHz,
     float loraBandwidthKHz,
@@ -375,6 +384,7 @@ bool AppController::saveSettings(
         batteryBrightnessPercent,
         displayTimeoutSeconds,
         uiLanguage,
+        otaEnabled,
         loraPreset,
         loraFrequencyMHz,
         loraBandwidthKHz,

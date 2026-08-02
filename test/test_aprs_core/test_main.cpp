@@ -339,6 +339,53 @@ void test_frequency_object() {
     TEST_ASSERT_FLOAT_WITHIN(0.01F, -0.6F, frame.frequency.offsetMhz);
 }
 
+
+void test_path_analysis_direct_packet() {
+    Aprs::ParsedFrame frame;
+    TEST_ASSERT_TRUE(Aprs::parseTnc2(
+        "OK1ABC-7>APRS,WIDE1-1,WIDE2-1:!4900.00N/01400.00E>direct",
+        frame));
+    TEST_ASSERT_TRUE(frame.path.valid);
+    TEST_ASSERT_TRUE(frame.path.direct);
+    TEST_ASSERT_EQUAL_UINT8(0, frame.path.digipeaterHops);
+    TEST_ASSERT_EQUAL_STRING("WIDE1-1,WIDE2-1", frame.path.path);
+    TEST_ASSERT_EQUAL_STRING("", frame.path.lastDigipeater);
+}
+
+void test_path_analysis_repeated_packet() {
+    Aprs::ParsedFrame frame;
+    TEST_ASSERT_TRUE(Aprs::parseTnc2(
+        "OK1ABC-7>APRS,OK0AAA-2*,WIDE2-1*,WIDE2-1:!4900.00N/01400.00E>via digi",
+        frame));
+    TEST_ASSERT_TRUE(frame.path.valid);
+    TEST_ASSERT_FALSE(frame.path.direct);
+    TEST_ASSERT_EQUAL_UINT8(2, frame.path.digipeaterHops);
+    TEST_ASSERT_EQUAL_STRING("OK0AAA-2*,WIDE2-1*,WIDE2-1", frame.path.path);
+    TEST_ASSERT_EQUAL_STRING("WIDE2-1", frame.path.lastDigipeater);
+}
+
+void test_path_analysis_ignores_internet_tokens() {
+    Aprs::ParsedFrame frame;
+    TEST_ASSERT_TRUE(Aprs::parseTnc2(
+        "OK1ABC>APRS,TCPIP*,qAC,T2SERVER:!4900.00N/01400.00E>internet",
+        frame));
+    TEST_ASSERT_TRUE(frame.path.valid);
+    TEST_ASSERT_TRUE(frame.path.direct);
+    TEST_ASSERT_EQUAL_UINT8(0, frame.path.digipeaterHops);
+}
+
+void test_third_party_path_uses_inner_frame() {
+    Aprs::ParsedFrame frame;
+    TEST_ASSERT_TRUE(Aprs::parseTnc2(
+        "IGATE>APRS,TCPIP*:}OK2AAA-5>APRS,OK0XYZ-2*,WIDE2-1:!4900.00N/01400.00E>inner",
+        frame));
+    TEST_ASSERT_EQUAL_STRING("OK2AAA-5", frame.source);
+    TEST_ASSERT_FALSE(frame.path.direct);
+    TEST_ASSERT_EQUAL_UINT8(1, frame.path.digipeaterHops);
+    TEST_ASSERT_EQUAL_STRING("OK0XYZ-2*,WIDE2-1", frame.path.path);
+    TEST_ASSERT_EQUAL_STRING("OK0XYZ-2", frame.path.lastDigipeater);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_encode_with_oe_header);
@@ -364,5 +411,9 @@ int main(int, char**) {
     RUN_TEST(test_parse_third_party_message);
     RUN_TEST(test_parse_extended_aprs_fields);
     RUN_TEST(test_frequency_object);
+    RUN_TEST(test_path_analysis_direct_packet);
+    RUN_TEST(test_path_analysis_repeated_packet);
+    RUN_TEST(test_path_analysis_ignores_internet_tokens);
+    RUN_TEST(test_third_party_path_uses_inner_frame);
     return UNITY_END();
 }

@@ -6,7 +6,7 @@
 namespace AppConfig {
 
 constexpr char FIRMWARE_NAME[] = "LoRa APRS Terminal";
-constexpr char FIRMWARE_VERSION[] = "2.7.2";
+constexpr char FIRMWARE_VERSION[] = "2.7.7";
 constexpr char BOARD_NAME[] = "Waveshare ESP32-Touch-LCD-3.5";
 
 // Defaults used when no values have yet been saved in NVS.
@@ -63,6 +63,17 @@ constexpr std::uint32_t POWER_POLL_INTERVAL_MS = 2000;
 constexpr std::uint8_t POWER_CRITICAL_PERCENT = 10;
 constexpr std::uint16_t POWER_CRITICAL_VOLTAGE_MV = 3400;
 
+// Long-term battery trend shown on the Power page. A percentage change must be
+// confirmed by two consecutive readings before a point is recorded. Power-mode
+// changes are immediate and a stable value is checkpointed at least hourly.
+// The complete ring buffer is persisted in NVS and restored after reboot.
+constexpr std::uint8_t POWER_HISTORY_PERCENT_STEP = 1;
+constexpr std::uint8_t POWER_HISTORY_PERCENT_CONFIRMATIONS = 2;
+constexpr std::uint32_t POWER_HISTORY_MAX_INTERVAL_MS = 3600000;
+constexpr std::size_t POWER_HISTORY_LENGTH = 96;
+static_assert(POWER_HISTORY_LENGTH > 1 && POWER_HISTORY_LENGTH <= 255,
+              "Power history length must fit the ViewState counter");
+
 // Display power saving is active only when the terminal is powered from the
 // battery. USB-C always forces full brightness and disables automatic blanking.
 constexpr std::uint8_t DISPLAY_USB_BRIGHTNESS_PERCENT = 100;
@@ -102,6 +113,15 @@ constexpr std::uint32_t DIGI_DUPLICATE_WINDOW_MS = 30000;
 constexpr std::uint32_t DIGI_MIN_DELAY_MS = 120;
 constexpr std::uint32_t DIGI_MAX_DELAY_MS = 420;
 constexpr std::uint32_t WIFI_RECONNECT_INTERVAL_MS = 15000;
+
+// Local maintenance access point used for browser-based firmware updates.
+// OTA mode is enabled explicitly from Settings and is disabled after reboot.
+constexpr char OTA_AP_SSID[] = "LoRa-APRS-OTA";
+constexpr char OTA_AP_PASSWORD[] = "loraaprs";
+constexpr std::uint8_t OTA_AP_CHANNEL = 6;
+constexpr std::uint8_t OTA_AP_MAX_CLIENTS = 1;
+constexpr std::uint32_t OTA_RESTART_DELAY_MS = 1500;
+constexpr std::uint32_t OTA_RETRY_INTERVAL_MS = 5000;
 constexpr std::uint32_t APRS_IS_RECONNECT_INTERVAL_MS = 10000;
 constexpr std::uint32_t APRS_IS_KEEPALIVE_TIMEOUT_MS = 90000;
 constexpr std::uint32_t APRS_IS_CONNECT_TIMEOUT_MS = 1500;

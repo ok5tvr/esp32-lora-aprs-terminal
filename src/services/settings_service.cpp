@@ -414,6 +414,7 @@ bool SettingsService::save(
     std::uint8_t batteryBrightnessPercent,
     std::uint16_t displayTimeoutSeconds,
     App::UiLanguage uiLanguage,
+    bool otaEnabled,
     App::LoRaPreset loraPreset,
     float loraFrequencyMHz,
     float loraBandwidthKHz,
@@ -520,6 +521,9 @@ bool SettingsService::save(
     view_.batteryBrightnessPercent = batteryBrightnessPercent;
     view_.displayTimeoutSeconds = displayTimeoutSeconds;
     view_.uiLanguage = uiLanguage;
+    // OTA is a deliberate maintenance mode. It is kept only in RAM so a
+    // successful update or any reboot always returns the device to normal mode.
+    view_.otaEnabled = otaEnabled;
     view_.loraPreset = loraPreset;
     view_.loraFrequencyMHz = loraConfig.frequencyMHz;
     view_.loraBandwidthKHz = loraConfig.bandwidthKHz;
@@ -531,13 +535,14 @@ bool SettingsService::save(
     setError(errorText, errorTextCapacity, "");
     LOG_I(
         "SETTINGS",
-        "Saved CALL %s, position %.6f %.6f, display %u%%/%u s, UI language %u, LoRa %.3f MHz BW %.1f SF%u CR4/%u P%d",
+        "Saved CALL %s, position %.6f %.6f, display %u%%/%u s, UI language %u, OTA %s, LoRa %.3f MHz BW %.1f SF%u CR4/%u P%d",
         view_.callsign,
         view_.defaultLatitude,
         view_.defaultLongitude,
         static_cast<unsigned>(view_.batteryBrightnessPercent),
         static_cast<unsigned>(view_.displayTimeoutSeconds),
         static_cast<unsigned>(view_.uiLanguage),
+        view_.otaEnabled ? "enabled" : "disabled",
         static_cast<double>(view_.loraFrequencyMHz),
         static_cast<double>(view_.loraBandwidthKHz),
         static_cast<unsigned>(view_.loraSpreadingFactor),

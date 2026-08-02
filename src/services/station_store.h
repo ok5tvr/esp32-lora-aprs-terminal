@@ -28,6 +28,14 @@ public:
         float lastSnrDb = 0.0F;
         std::uint32_t lastHeardMs = 0;
         std::uint32_t heardCount = 0;
+        bool lastReceptionDirect = true;
+        std::uint8_t digipeaterHops = 0;
+        std::uint32_t directReceptionCount = 0;
+        std::uint32_t repeatedReceptionCount = 0;
+        bool hasDirectReception = false;
+        std::uint32_t lastDirectHeardMs = 0;
+        char path[Aprs::MAX_PATH_LENGTH + 1] = {};
+        char lastDigipeater[Aprs::MAX_SOURCE_CALL_LENGTH + 1] = {};
         char lastFrame[192] = {};
     };
 

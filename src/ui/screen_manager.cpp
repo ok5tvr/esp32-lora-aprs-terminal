@@ -364,8 +364,10 @@ void ScreenManager::handleNavigation(App::NavigationAction action) {
     }
 
     if (currentScreen_ == App::ScreenId::StationDetail) {
-        if (action == App::NavigationAction::Confirm &&
-            selectedStationValid_ && selectedStation_.hasPosition) {
+        if (action == App::NavigationAction::Up || action == App::NavigationAction::Down) {
+            StationDetailScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
+        } else if (action == App::NavigationAction::Confirm &&
+                   selectedStationValid_ && selectedStation_.hasPosition) {
             show(App::ScreenId::StationNavigation);
         }
         return;

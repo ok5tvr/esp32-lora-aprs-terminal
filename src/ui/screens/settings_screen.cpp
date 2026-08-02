@@ -48,6 +48,7 @@ lv_obj_t* brightnessSlider = nullptr;
 lv_obj_t* brightnessValueLabel = nullptr;
 lv_obj_t* timeoutDropdown = nullptr;
 lv_obj_t* uiLanguageDropdown = nullptr;
+lv_obj_t* otaSwitch = nullptr;
 lv_obj_t* loraPresetDropdown = nullptr;
 lv_obj_t* bandwidthDropdown = nullptr;
 lv_obj_t* spreadingFactorDropdown = nullptr;
@@ -535,6 +536,46 @@ void create(
     lv_obj_set_style_text_color(loraInfo, lv_color_hex(0x92A7C7), 0);
     lv_obj_align(loraInfo, LV_ALIGN_TOP_LEFT, 4, 641);
 
+    lv_obj_t* otaDivider = lv_obj_create(card);
+    lv_obj_set_size(otaDivider, 420, 1);
+    lv_obj_align(otaDivider, LV_ALIGN_TOP_MID, 0, 687);
+    lv_obj_set_style_bg_color(otaDivider, lv_color_hex(0x31425F), 0);
+    lv_obj_set_style_bg_opa(otaDivider, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(otaDivider, 0, 0);
+
+    lv_obj_t* otaTitle = lv_label_create(card);
+    lv_label_set_text(otaTitle, App::Localization::text("Aktualizace OTA", "OTA update"));
+    lv_obj_set_style_text_font(otaTitle, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(otaTitle, lv_color_hex(0x56C7FF), 0);
+    lv_obj_align(otaTitle, LV_ALIGN_TOP_LEFT, 4, 701);
+
+    lv_obj_t* otaLabel = lv_label_create(card);
+    lv_label_set_text(otaLabel, App::Localization::text("Spustit webovy OTA rezim", "Start web OTA mode"));
+    lv_obj_set_style_text_font(otaLabel, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(otaLabel, lv_color_hex(0xBDCAE0), 0);
+    lv_obj_align(otaLabel, LV_ALIGN_TOP_LEFT, 4, 739);
+
+    otaSwitch = lv_switch_create(card);
+    lv_obj_set_size(otaSwitch, 58, 30);
+    lv_obj_align(otaSwitch, LV_ALIGN_TOP_RIGHT, -2, 730);
+    if (state.otaEnabled) {
+        lv_obj_add_state(otaSwitch, LV_STATE_CHECKED);
+    }
+
+    lv_obj_t* otaInfo = lv_label_create(card);
+    lv_label_set_text_fmt(
+        otaInfo,
+        App::Localization::text(
+            "Po ulozeni: WiFi %s, heslo %s, web http://192.168.4.1. Po restartu se OTA vypne.",
+            "After saving: Wi-Fi %s, password %s, web http://192.168.4.1. OTA turns off after reboot."),
+        AppConfig::OTA_AP_SSID,
+        AppConfig::OTA_AP_PASSWORD);
+    lv_obj_set_width(otaInfo, 420);
+    lv_label_set_long_mode(otaInfo, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_font(otaInfo, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(otaInfo, lv_color_hex(0x92A7C7), 0);
+    lv_obj_align(otaInfo, LV_ALIGN_TOP_LEFT, 4, 773);
+
     lv_obj_t* versionLabel = lv_label_create(card);
     lv_label_set_text_fmt(
         versionLabel,
@@ -543,11 +584,11 @@ void create(
         AppConfig::FIRMWARE_VERSION);
     lv_obj_set_style_text_font(versionLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(versionLabel, lv_color_hex(0x56C7FF), 0);
-    lv_obj_align(versionLabel, LV_ALIGN_TOP_LEFT, 4, 688);
+    lv_obj_align(versionLabel, LV_ALIGN_TOP_LEFT, 4, 835);
 
     lv_obj_t* saveButton = lv_btn_create(card);
     lv_obj_set_size(saveButton, 132, 39);
-    lv_obj_align(saveButton, LV_ALIGN_TOP_RIGHT, -2, 711);
+    lv_obj_align(saveButton, LV_ALIGN_TOP_RIGHT, -2, 858);
     lv_obj_set_style_bg_color(saveButton, lv_color_hex(0x2764D8), 0);
     lv_obj_add_event_cb(saveButton, saveClicked, LV_EVENT_CLICKED, nullptr);
     lv_obj_t* saveLabel = lv_label_create(saveButton);
@@ -565,7 +606,7 @@ void create(
             : App::Localization::text("NVS: nedostupne", "NVS: unavailable"));
     lv_obj_set_style_text_font(messageLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(messageLabel, lv_color_hex(0x92A7C7), 0);
-    lv_obj_align(messageLabel, LV_ALIGN_TOP_LEFT, 4, 719);
+    lv_obj_align(messageLabel, LV_ALIGN_TOP_LEFT, 4, 866);
 
     applyPresetSelection(false);
 }
@@ -585,7 +626,7 @@ void processPending() {
 void save() {
     if (saveHandler == nullptr || editorOverlay != nullptr ||
         brightnessSlider == nullptr || timeoutDropdown == nullptr ||
-        uiLanguageDropdown == nullptr || loraPresetDropdown == nullptr ||
+        uiLanguageDropdown == nullptr || otaSwitch == nullptr || loraPresetDropdown == nullptr ||
         bandwidthDropdown == nullptr ||
         spreadingFactorDropdown == nullptr || codingRateDropdown == nullptr ||
         powerDropdown == nullptr) {
@@ -631,6 +672,7 @@ void save() {
         lv_dropdown_get_selected(timeoutDropdown));
     const App::UiLanguage uiLanguage = static_cast<App::UiLanguage>(
         lv_dropdown_get_selected(uiLanguageDropdown));
+    const bool otaEnabled = lv_obj_has_state(otaSwitch, LV_STATE_CHECKED);
 
     char error[160] = {};
     const bool saved = saveHandler(
@@ -640,6 +682,7 @@ void save() {
         brightness,
         timeout,
         uiLanguage,
+        otaEnabled,
         preset,
         config.frequencyMHz,
         config.bandwidthKHz,
@@ -651,9 +694,13 @@ void save() {
         saveContext);
     setMessage(
         saved
-            ? App::Localization::text(
-                "Nastaveni ulozeno; LoRa se prepne po uvolneni TX fronty.",
-                "Settings saved; LoRa will switch after the TX queue is empty.")
+            ? (otaEnabled
+                ? App::Localization::text(
+                    "OTA aktivni: pripojte se k LoRa-APRS-OTA a otevrite 192.168.4.1.",
+                    "OTA active: connect to LoRa-APRS-OTA and open 192.168.4.1.")
+                : App::Localization::text(
+                    "Nastaveni ulozeno; OTA je vypnuto.",
+                    "Settings saved; OTA is disabled."))
             : error);
 }
 

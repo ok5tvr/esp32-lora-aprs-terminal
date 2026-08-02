@@ -74,6 +74,7 @@ constexpr int LV_CHART_TYPE_LINE = 1;
 constexpr int LV_CHART_AXIS_PRIMARY_Y = 1;
 constexpr int LV_PART_MAIN = 0;
 constexpr int LV_PART_INDICATOR = 1;
+constexpr int LV_PART_ITEMS = 2;
 constexpr int LV_OBJ_FLAG_SCROLLABLE = 2;
 inline void lv_obj_clear_flag(lv_obj_t*, int) {}
 inline lv_obj_t* lv_chart_create(lv_obj_t*) { static lv_obj_t o; return &o; }

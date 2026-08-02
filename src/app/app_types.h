@@ -103,6 +103,7 @@ using SettingsSaveHandler = bool (*)(
     std::uint8_t batteryBrightnessPercent,
     std::uint16_t displayTimeoutSeconds,
     UiLanguage uiLanguage,
+    bool otaEnabled,
     LoRaPreset loraPreset,
     float loraFrequencyMHz,
     float loraBandwidthKHz,

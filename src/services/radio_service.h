@@ -123,6 +123,7 @@ private:
     void updateConfigurationView();
     void serviceNoiseMonitor(std::uint32_t now);
     void appendNoiseMeasurement(float averageDbm, float peakDbm, std::uint32_t now);
+    void resetNoiseHistory(std::uint32_t now);
     void cancelNoiseBurst(std::uint32_t now);
     bool enqueueTnc2Bytes(
         const std::uint8_t* frame,

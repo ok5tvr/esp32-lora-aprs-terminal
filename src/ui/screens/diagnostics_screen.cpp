@@ -6,7 +6,6 @@
 
 #include "app_config.h"
 #include "app/localization.h"
-#include "lora_profile.h"
 #include "ui/ui_components.h"
 
 namespace Ui {
@@ -130,14 +129,15 @@ void update(const Services::RadioService::ViewState& state, std::uint32_t now) {
         lv_label_set_text_fmt(
             latestLabel,
             App::Localization::text("RSSI pozadi %.3f MHz: cekam na prvni mereni", "Background RSSI %.3f MHz: waiting for first measurement"),
-            static_cast<double>(LoRaProfile::FREQUENCY_MHZ));
+            static_cast<double>(state.loraFrequencyMHz));
         lv_label_set_text(
             statsLabel,
             App::Localization::text("Modra = prumer, oranzova = spicka v mericim okne", "Blue = average, orange = peak in the measurement window"));
     } else {
         lv_label_set_text_fmt(
             latestLabel,
-            App::Localization::text("Posledni: %.1f dBm | spicka %.1f dBm", "Latest: %.1f dBm | peak %.1f dBm"),
+            App::Localization::text("%.3f MHz: %.1f dBm | spicka %.1f dBm", "%.3f MHz: %.1f dBm | peak %.1f dBm"),
+            static_cast<double>(state.loraFrequencyMHz),
             static_cast<double>(state.noiseLatestAverageDbm),
             static_cast<double>(state.noiseLatestPeakDbm));
         lv_label_set_text_fmt(

@@ -9,6 +9,7 @@ namespace Ui {
 namespace StationDetailScreen {
 
 void create();
+void scroll(int direction);
 void update(
     const Services::StationStore::Station& station,
     const Services::PositionReference& reference,

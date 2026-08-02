@@ -8,3 +8,5 @@ struct PowerTestSerial {
 };
 
 inline PowerTestSerial Serial;
+inline std::uint32_t powerTestMillis = 0U;
+inline std::uint32_t millis() { return powerTestMillis; }

@@ -42,6 +42,18 @@ voltage, operating state, charger phase, configured charge current, charge
 target voltage, USB/VBUS state, VBUS voltage, system voltage, internal PMIC
 temperature and the latest detected state transition.
 
+From version 2.7.4 it displays a persistent battery-percentage trend with 96
+points. A point is stored when a 1-percent change in either direction is
+confirmed by two consecutive polls, when the operating mode changes, or after
+one hour with no change. Green segments indicate active charging, orange segments discharging and
+blue segments USB/standby operation. The x-axis is reconstructed from the stored
+minute timestamps, so variable sampling intervals retain their real spacing.
+
+The complete history is saved to a dedicated ESP32 NVS namespace as one
+versioned blob protected by CRC32. It is restored after reset or power loss.
+NVS is written only when a new history point is accepted; the normal two-second
+PMIC polling path performs no Flash write.
+
 The temperature belongs to the AXP2101 die. It is not a measurement of the
 Li-Pol cell. The displayed current is the charger configuration value, not a
 live current measurement.
@@ -51,7 +63,8 @@ live current measurement.
 Power telemetry is processed after GPS input and the LoRa radio service. It is
 polled before display-power policy so USB insertion can wake the backlight; the
 tracker and Stopar continue in the same loop. AXP2101 values are read once every
-two seconds. No filesystem access or blocking delay is used by `PowerService`.
+two seconds. NVS access occurs only when a history point is added or restored at
+startup; no filesystem access or blocking delay is used during ordinary polls.
 
 
 ## Rizeni podsviceni od verze 2.3.0

@@ -40,6 +40,7 @@ public:
         std::uint8_t batteryBrightnessPercent = 70;
         std::uint16_t displayTimeoutSeconds = 60;
         App::UiLanguage uiLanguage = App::UiLanguage::Czech;
+        bool otaEnabled = false;
         App::LoRaPreset loraPreset = App::LoRaPreset::CzeAprs;
         float loraFrequencyMHz = LoRaProfile::FREQUENCY_MHZ;
         float loraBandwidthKHz = LoRaProfile::BANDWIDTH_KHZ;
@@ -58,6 +59,7 @@ public:
         std::uint8_t batteryBrightnessPercent,
         std::uint16_t displayTimeoutSeconds,
         App::UiLanguage uiLanguage,
+        bool otaEnabled,
         App::LoRaPreset loraPreset,
         float loraFrequencyMHz,
         float loraBandwidthKHz,

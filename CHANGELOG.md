@@ -1,5 +1,44 @@
 # Changelog
 
+## 2.7.7
+
+- Fixed the startup `Stack canary watchpoint triggered (loopTask)` panic in `StationStore::clear()`.
+- The approximately 8.5 kB `StationStore::ViewState` is now reconstructed directly in its existing global storage instead of creating a full temporary object on the Arduino loop-task stack.
+- Station capacity, complete APRS path storage, DIRECT/VIA DIGI counters and station-detail behaviour are unchanged.
+
+## 2.7.6
+
+- Added APRS path analysis for every parsed station, object and item.
+- The complete path after the destination is retained for the latest packet.
+- Used path elements marked with `*` are counted as digipeater hops; Internet-only `TCPIP`, `TCPXX` and `qA` path elements are excluded.
+- The rightmost used RF path element is shown as the last digipeater.
+- Heard-entity history now keeps separate direct and repeated reception counters and the time of the last direct reception.
+- The station-detail page is vertically scrollable and shows `DIRECT` or `VIA DIGI`, hop count, last DIGI, counters, last-direct age, full path and the complete stored TNC2 frame.
+
+## 2.7.5
+
+- Added an optional Web OTA service enabled from Settings.
+- OTA starts a WPA2 access point at `192.168.4.1` and accepts an ESP32 `firmware.bin` through a browser.
+- Added two 7 MB OTA application slots to the 16 MB partition table.
+- OTA runs as AP+STA when the APRS-IS iGate is enabled and automatically returns disabled after reboot.
+
+## 2.7.4
+
+- Battery history now records a point when a 1-percent change in either direction is confirmed by two consecutive polls.
+- Power-mode transitions are still stored immediately and a stable value is checkpointed after one hour.
+- The 96-point history is saved as one versioned NVS blob with CRC32 validation.
+- History is restored after reset or power loss without adding a duplicate startup point.
+- Stored timestamps use a persistent minute timeline and the graph is rendered according to real elapsed time.
+- Flash is written only when a history point is added, never during normal two-second PMIC polling.
+
+## 2.7.3
+
+- Diagnostics now shows the actually active LoRa frequency instead of the fixed 433.775 MHz default.
+- RSSI/noise history is cleared after a successful LoRa RF profile change so measurements from different configurations are not mixed.
+- Added a 24-hour battery-percentage graph to the Power page: 96 points at 15-minute intervals.
+- Charging, discharging and USB/standby sections are colour-coded; power-mode transitions are stored immediately.
+- Battery history is kept in RAM for the current runtime and does not write repeatedly to Flash or microSD.
+
 ## 2.7.2
 
 - Fixed Arduino macro collision in `astronomy_screen.cpp`.

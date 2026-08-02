@@ -2,11 +2,17 @@
 
 #include <cstdio>
 #include <cstring>
+#include <new>
 
 namespace Services {
 
 void StationStore::clear() {
-    view_ = ViewState{};
+    // Construct the large state directly in its existing storage. Using
+    // `view_ = ViewState{}` creates an approximately 8.5 kB temporary on the
+    // Arduino loopTask stack after route-history fields were added in 2.7.6.
+    // That temporary can overwrite the stack canary during startup.
+    view_.~ViewState();
+    ::new (static_cast<void*>(&view_)) ViewState{};
 }
 
 bool StationStore::ingest(
@@ -68,6 +74,21 @@ bool StationStore::ingest(
     updated.lastSnrDb = snrDb;
     updated.lastHeardMs = now;
     ++updated.heardCount;
+    updated.lastReceptionDirect = !frame.path.valid || frame.path.direct;
+    updated.digipeaterHops = frame.path.valid ? frame.path.digipeaterHops : 0U;
+    std::snprintf(updated.path, sizeof(updated.path), "%s", frame.path.path);
+    std::snprintf(
+        updated.lastDigipeater,
+        sizeof(updated.lastDigipeater),
+        "%s",
+        frame.path.lastDigipeater);
+    if (updated.lastReceptionDirect) {
+        ++updated.directReceptionCount;
+        updated.hasDirectReception = true;
+        updated.lastDirectHeardMs = now;
+    } else {
+        ++updated.repeatedReceptionCount;
+    }
     if (lastFrame != nullptr && lastFrame[0] != '\0') {
         std::snprintf(updated.lastFrame, sizeof(updated.lastFrame), "%s", lastFrame);
     }

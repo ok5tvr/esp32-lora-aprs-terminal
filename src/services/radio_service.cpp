@@ -245,6 +245,7 @@ void RadioService::servicePendingConfiguration(std::uint32_t now) {
     view_.noiseNextMeasurementAtMs = nextNoiseMeasurementAt_;
 
     if (ready) {
+        resetNoiseHistory(now);
         noticeKind_ = NoticeKind::ConfigurationApplied;
         noticeError_ = 0;
         refreshLocalizedNotice();
@@ -383,6 +384,34 @@ void RadioService::appendNoiseMeasurement(
         static_cast<double>(peakDbm),
         static_cast<unsigned>(count),
         static_cast<unsigned>(capacity));
+}
+
+void RadioService::resetNoiseHistory(std::uint32_t now) {
+    std::memset(view_.noiseHistoryDbm, 0, sizeof(view_.noiseHistoryDbm));
+    std::memset(view_.noisePeakHistoryDbm, 0, sizeof(view_.noisePeakHistoryDbm));
+    view_.noiseHistoryCount = 0;
+    view_.noiseLastMeasurementAtMs = 0;
+    view_.noiseLatestAverageDbm = 0.0F;
+    view_.noiseLatestPeakDbm = 0.0F;
+    view_.noiseHistoryAverageDbm = 0.0F;
+    view_.noiseHistoryMinDbm = 0.0F;
+    view_.noiseHistoryMaxDbm = 0.0F;
+    noiseBurstActive_ = false;
+    noiseBurstSamples_ = 0;
+    noiseBurstAccumulator_ = 0.0F;
+    noiseBurstPeakDbm_ = -170.0F;
+    nextNoiseMeasurementAt_ = now + AppConfig::RADIO_NOISE_INITIAL_DELAY_MS;
+    view_.noiseMeasurementActive = false;
+    view_.noiseBurstProgress = 0;
+    view_.noiseNextMeasurementAtMs = nextNoiseMeasurementAt_;
+    ++view_.noiseHistoryRevision;
+
+    LOG_I(
+        "NOISE",
+        "History reset for %.3f MHz BW %.1f SF%u",
+        static_cast<double>(view_.loraFrequencyMHz),
+        static_cast<double>(view_.loraBandwidthKHz),
+        static_cast<unsigned>(view_.loraSpreadingFactor));
 }
 
 void RadioService::cancelNoiseBurst(std::uint32_t now) {

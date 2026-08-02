@@ -1,8 +1,7 @@
 # Waveshare ESP32-Touch-LCD-3.5 - LoRa APRS terminal
 
-> Version 2.7.2 extends the fully offline **Astronomie / Astronomy** page with a dynamically drawn Moon phase and current Sun altitude.
-> It calculates Sun and Moon rise/set times and the current Moon phase from
-> GPS/default position and the date maintained by GPS-synchronized RTC.
+> Version 2.7.7 fixes the startup stack overflow introduced by the larger station route-history state in 2.7.6. APRS route analysis remains unchanged.
+> Version 2.7.5 also adds optional browser-based OTA at 192.168.4.1; persistent battery history from 2.7.4 remains available.
 
 
 PlatformIO project for the **classic ESP32-D0WDR2-V3** Waveshare board with:
@@ -23,7 +22,7 @@ This project is **not** for the ESP32-S3 version of the board.
 - Current Sun altitude is displayed in degrees, including negative values below the horizon.
 - Dynamic astronomy values refresh every five minutes, while date or significant position changes force an immediate recalculation.
 
-## Main menu order in version 2.7.2
+## Main menu order in version 2.7.7
 
 1. LoRa APRS
 2. Prijate stanice / Received stations
@@ -84,12 +83,6 @@ Connect a 433 MHz antenna before transmitting. Place 100 nF, 10 uF and 47-100 uF
 
 GPIO2 is a boot-strapping pin. Add a 10 kOhm pulldown from GPIO2 to GND so RA-02 DIO0 remains low during reset and firmware upload. Do not enable the onboard I2S audio interface because GPIO2 and GPIO4 are reused by LoRa DIO0 and GPS RX.
 
-### GPS
-
-| GPS | GPIO |<br>
-| TX | GPIO4 |<br>
-| VCC | 3.3 V only |<br>
-| GND | GND |
 
 ## Memory layout
 
@@ -104,6 +97,7 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 - dedicated **Diagnostika** page with a 20-point graph of five-minute background/channel RSSI measurements
 - dedicated **Mapa / Map** page with microSD XYZ tiles, touch-drag panning, own position, recent Stopar trail and APRS entity symbols
 - firmware name and version displayed on the **Nastaveni** page
+- optional Web OTA mode from Settings with a WPA2 access point and firmware upload page at `192.168.4.1`
 - touchscreen LoRa profile configuration with default CZE APRS and a validated custom profile stored in NVS
 - safe SX1278-only reconfiguration after the active TX and central TX queue complete
 - battery-only display brightness and inactivity timeout stored in NVS
@@ -126,6 +120,7 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 - compact graphical APRS icons with overlay rendering, including the LoRa iGate `L&` symbol
 - selectable Heard Stations screen; Up/Down selects an entity and OK opens its detail
 - station/object/item detail with last-heard age, packet count, coordinates, RSSI, SNR and last TNC2 frame
+- received-path analysis with DIRECT/VIA DIGI state, full APRS path, hop count, last used DIGI, direct/repeated counters and last-direct age
 - simple navigation to a positioned APRS entity with live distance and true bearing from GPS/default reference
 - dedicated list of the five most recently heard unique APRS weather stations
 - decoded temperature, humidity, pressure, wind, rain and solar-radiation data
@@ -139,7 +134,7 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 - independent **Stopar** GPS route logger enabled from the Tracker page
 - read-only AXP2101 battery, USB-C, charger and PMIC-temperature telemetry
 - permanent header summary with battery percentage, voltage and battery/charge/USB symbol
-- dedicated **Napajeni** page with charger phase, configured current, target voltage and last power event
+- dedicated **Napajeni** page with charger phase, configured current, target voltage, last power event and persistent variable-interval battery history
 - automatic pause after 30 seconds without movement and automatic resume after movement returns
 - manual pause/resume from the dedicated Stopar page
 - timestamped semicolon-separated TXT logs in `/STOPAR` on microSD, with the eight newest files listed on screen
@@ -147,7 +142,7 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 - receive-only RF-to-APRS-IS iGate using verified login and `qAO` gating
 - touchscreen WiFi, APRS-IS, DIGI mode, hop-limit and startup configuration stored in NVS
 - onboard microSD initialization and capacity detection
-- native unit tests for APRS framing, messages, Mic-E, objects, items, positions and weather parsing
+- native unit tests for APRS framing, messages, Mic-E, objects, items, positions, weather and received-path analysis
 
 ## Configuration
 
@@ -405,6 +400,15 @@ The **Napajeni** page displays:
 - system voltage and internal PMIC die temperature
 - the most recent detected transition, such as USB connection/disconnection,
   battery connection/disconnection, charge start/end or critical battery
+- a 96-point battery-percentage graph with variable time spacing; charging is
+  green, discharging orange and USB/standby blue
+- a new point whenever a 1-percent change is confirmed by two consecutive polls
+- an immediate point whenever the power mode changes, plus a one-hour checkpoint
+  while the percentage remains stable
+- persistent NVS storage, so the graph is restored after reset or power loss
+
+Only a completed history point is written to NVS. Normal two-second PMIC polling
+does not write Flash, which keeps the write frequency low.
 
 Power values are polled every two seconds after GPS, LoRa, tracker and Stopar
 processing. The operation is short, read-only I2C traffic and does not perform
@@ -590,6 +594,15 @@ Live APRS objects (`;`) and items (`)`) support both uncompressed and compressed
 positions. Killed objects/items are removed from the visible list. A station
 received without a position is still listed; if it had a position earlier, its
 last known position is retained.
+
+The detail page also analyzes the route of the latest packet. A path element
+ending in `*` is treated as already used. If no used RF element is present, the
+packet is marked `DIRECT`; otherwise it is marked `VIA DIGI`. Internet-only
+`TCPIP`, `TCPXX` and `qA` elements are not counted as radio hops. The rightmost
+used RF element is displayed as the last DIGI. Separate direct/repeated counters
+and the age of the last direct reception are retained while the entity remains
+in the 15-entry RAM history. Up/Down scrolls the expanded detail; OK still opens
+navigation when a position is available.
 
 The station history is currently held in RAM and is cleared by reset or power
 off.
