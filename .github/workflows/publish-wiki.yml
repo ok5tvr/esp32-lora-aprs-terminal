@@ -1,0 +1,68 @@
+name: Publish GitHub Wiki
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "wiki/**"
+      - ".github/workflows/publish-wiki.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-wiki
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Wiki source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f wiki/Home.md
+          test -f wiki/_Sidebar.md
+          count=$(find wiki -maxdepth 1 -type f -name '*.md' | wc -l)
+          if [ "$count" -lt 3 ]; then
+            echo "Wiki source is incomplete."
+            exit 1
+          fi
+
+      - name: Publish Wiki pages
+        shell: bash
+        env:
+          OPTIONAL_WIKI_TOKEN: ${{ secrets.WIKI_TOKEN }}
+          REPOSITORY_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          token="${OPTIONAL_WIKI_TOKEN:-${REPOSITORY_TOKEN}}"
+          remote="https://x-access-token:${token}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+
+          rm -rf .wiki-publish
+          git clone "$remote" .wiki-publish
+
+          find .wiki-publish -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a wiki/. .wiki-publish/
+
+          cd .wiki-publish
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+
+          if git diff --cached --quiet; then
+            echo "Wiki is already up to date."
+            exit 0
+          fi
+
+          git commit -m "Update Wiki from ${GITHUB_SHA}"
+          git push origin HEAD:master

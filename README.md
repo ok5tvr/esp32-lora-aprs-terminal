@@ -755,3 +755,13 @@ power-up because GPIO0 also selects the ESP32 download mode.
 ## APRS parser 1.4.0
 
 Parser rozlisuje stanice, objekty a polozky, normalni/komprimovanou/Mic-E polohu, klasickou telemetrii T#, PHG, emergency a frekvencni udaje v komentari. Seznam meteostanic podporuje vyber a otevreni samostatneho detailu tlacitkem OK.
+
+## English GitHub Wiki
+
+The repository now contains a complete English manual in the `wiki/` directory.
+After the one-time GitHub Wiki initialization, `.github/workflows/publish-wiki.yml`
+automatically mirrors those Markdown pages to the repository Wiki whenever they
+change on `main` or `master`.
+
+Setup instructions are in `docs/GITHUB_WIKI.md`.
+

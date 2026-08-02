@@ -2,6 +2,9 @@
 
 ## 2.7.7
 
+- Added a complete 21-page English GitHub Wiki source under `wiki/`.
+- Added automatic Wiki synchronization through `.github/workflows/publish-wiki.yml`.
+- Added one-time Wiki setup instructions in `docs/GITHUB_WIKI.md`.
 - Fixed the startup `Stack canary watchpoint triggered (loopTask)` panic in `StationStore::clear()`.
 - The approximately 8.5 kB `StationStore::ViewState` is now reconstructed directly in its existing global storage instead of creating a full temporary object on the Arduino loop-task stack.
 - Station capacity, complete APRS path storage, DIRECT/VIA DIGI counters and station-detail behaviour are unchanged.
