@@ -1,7 +1,7 @@
 # Waveshare ESP32-Touch-LCD-3.5 - LoRa APRS terminal
 
-> Version 2.7.7 fixes the startup stack overflow introduced by the larger station route-history state in 2.7.6. APRS route analysis remains unchanged.
-> Version 2.7.5 also adds optional browser-based OTA at 192.168.4.1; persistent battery history from 2.7.4 remains available.
+> Version 2.7.11 adds SmartBeacon profiles for car, bicycle and walking, confirmed start/stop beacons, completed-TX scheduling and APRS-compliant compressed comments.
+> Devices that already use the v2.7.8 A/B partition table can install v2.7.11 through Web OTA. Older single-slot installations must first receive a complete USB upload.
 
 
 PlatformIO project for the **classic ESP32-D0WDR2-V3** Waveshare board with:
@@ -22,7 +22,7 @@ This project is **not** for the ESP32-S3 version of the board.
 - Current Sun altitude is displayed in degrees, including negative values below the horizon.
 - Dynamic astronomy values refresh every five minutes, while date or significant position changes force an immediate recalculation.
 
-## Main menu order in version 2.7.7
+## Main menu order in version 2.7.11
 
 1. LoRa APRS
 2. Prijate stanice / Received stations
@@ -30,13 +30,24 @@ This project is **not** for the ESP32-S3 version of the board.
 4. Meteostanice / Weather stations
 5. Mapa / Map
 6. Tracker
-7. Stopar / Trail logger
-8. DIGI / iGate
-9. GPS prijimac / GPS receiver
-10. Astronomie / Astronomy
-11. Diagnostika / Diagnostics
-12. Napajeni / Power
-13. Nastaveni / Settings
+7. Beacon
+8. Stopar / Trail logger
+9. DIGI / iGate
+10. GPS prijimac / GPS receiver
+11. Astronomie / Astronomy
+12. Diagnostika / Diagnostics
+13. Napajeni / Power
+14. Nastaveni / Settings
+
+## Important upgrade note for v2.7.8
+
+The v2.7.8 partition table provides two 7 MB OTA application slots. When upgrading from v2.7.7 or any older single-slot installation, use the complete USB upload command once:
+
+```powershell
+pio run -e waveshare-esp32-release -t upload
+```
+
+Uploading only `firmware.bin` cannot replace the partition table. After this one-time USB installation, later compatible releases can be uploaded through the Web OTA page.
 
 ## Build
 
@@ -92,12 +103,14 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 
 - splash screen
 - touch menu with Up, Down, OK and Back buttons
-- onboard BOOT button short press for an immediate APRS position beacon
+- onboard BOOT button short press for an immediate APRS position beacon using the saved Tracker source, format, symbol, path and comment
 - LoRa status with APRS/decode counters, TX queue depth, drops and recovery history
-- dedicated **Diagnostika** page with a 20-point graph of five-minute background/channel RSSI measurements
+- dedicated **Diagnostika** page with a 20-point RSSI graph plus live heap, largest-block, minimum-heap, PSRAM, loop-stack, uptime and reset-reason data
 - dedicated **Mapa / Map** page with microSD XYZ tiles, touch-drag panning, own position, recent Stopar trail and APRS entity symbols
+- dedicated **Beacon** page for one-shot position transmission from GPS or the default QTH, with independent NVS-stored comment and `DIRECT`/`WIDE1-1`/`WIDE2-2` path
+- Tracker settings include an editable 48-character APRS comment and selectable `DIRECT`/`WIDE1-1`/`WIDE2-2` path for scheduled, SmartBeacon and BOOT-button packets
 - firmware name and version displayed on the **Nastaveni** page
-- optional Web OTA mode from Settings with a WPA2 access point and firmware upload page at `192.168.4.1`
+- hardened A/B Web OTA from Settings with a WPA2 access point, progress/status reporting, ESP32 application-image validation and safe abort at `192.168.4.1`
 - touchscreen LoRa profile configuration with default CZE APRS and a validated custom profile stored in NVS
 - safe SX1278-only reconfiguration after the active TX and central TX queue complete
 - battery-only display brightness and inactivity timeout stored in NVS
@@ -118,7 +131,7 @@ LVGL objects are allocated preferentially in the onboard PSRAM. The display draw
 - fixed list of the 15 most recently heard APRS stations, objects or items
 - original source callsign with SSID, APRS symbol code and GPS position
 - compact graphical APRS icons with overlay rendering, including the LoRa iGate `L&` symbol
-- selectable Heard Stations screen; Up/Down selects an entity and OK opens its detail
+- selectable Heard Stations screen with D/1-9+/I/? route badges; Up/Down selects an entity and OK opens its detail
 - station/object/item detail with last-heard age, packet count, coordinates, RSSI, SNR and last TNC2 frame
 - received-path analysis with DIRECT/VIA DIGI state, full APRS path, hop count, last used DIGI, direct/repeated counters and last-direct age
 - simple navigation to a positioned APRS entity with live distance and true bearing from GPS/default reference
@@ -700,6 +713,7 @@ Source        GPS / default configured position
 Format        normal uncompressed / Base-91 compressed
 APRS symbol   selected from a touch dropdown
 Scheduling    fixed interval / SmartBeacon
+Smart profile car / bicycle / walking
 Interval      30, 60, 120, 180, 300, 600, 900, 1800 or 3600 seconds
 ```
 
@@ -713,11 +727,11 @@ detected. Transmission then waits for a fresh position fix. A tracker using the
 saved default position can work without a GPS receiver, but uses fixed interval
 beaconing because a static position has no speed or course for SmartBeacon.
 
-SmartBeacon adjusts the periodic interval according to speed and can send an
-early corner beacon after a sufficient course change. Normal position packets
-include `ddd/sss` course and speed when fresh GPS movement data are available.
-Compressed packets use the APRS Base-91 position and compressed course/speed
-fields. The tracker uses the stored callsign and the APRS symbol selected in the Tracker menu.
+SmartBeacon offers three profiles: **car**, **bicycle** and **walking**. Each profile has its own low/high speed thresholds, slow/fast interval, turn sensitivity and start/stop confirmation. The tracker can send an early corner beacon, a confirmed start-moving beacon and a final stopped beacon.
+
+The schedule is restarted only after the SX1278 reports a completed RF transmission. A frame merely waiting in the TX queue does not advance the SmartBeacon timer. Near-zero-speed GPS course is ignored to prevent false corner detection.
+
+Normal position packets include `ddd/sss` course and speed when movement data are reliable. Compressed packets use APRS Base-91 position and compressed course/speed fields. Position frames use the `=` identifier because the terminal supports APRS messaging. Compressed comments are limited to 40 characters; standard packets can use the full configured 48-character comment. The tracker uses the stored callsign and selected APRS symbol.
 
 All services remain active independently of the visible screen: LoRa reception,
 station/weather collection, GPS parsing and tracker scheduling continue while

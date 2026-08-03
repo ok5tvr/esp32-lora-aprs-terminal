@@ -7,6 +7,7 @@
 #include "app/localization.h"
 #include "app_config.h"
 #include "ui/screens/astronomy_screen.h"
+#include "ui/screens/beacon_screen.h"
 #include "ui/screens/diagnostics_screen.h"
 #include "ui/screens/digi_igate_screen.h"
 #include "ui/screens/gps_screen.h"
@@ -79,6 +80,8 @@ void ScreenManager::begin(
     void* digiIgateSaveContext,
     App::TrackerSettingsSaveHandler trackerSaveHandler,
     void* trackerSaveContext,
+    App::BeaconActionHandler beaconActionHandler,
+    void* beaconActionContext,
     App::MapPanHandler mapPanHandler,
     void* mapPanContext) {
 
@@ -92,6 +95,8 @@ void ScreenManager::begin(
     digiIgateSaveContext_ = digiIgateSaveContext;
     trackerSaveHandler_ = trackerSaveHandler;
     trackerSaveContext_ = trackerSaveContext;
+    beaconActionHandler_ = beaconActionHandler;
+    beaconActionContext_ = beaconActionContext;
     MapScreen::setPanHandler(mapPanHandler, mapPanContext);
     observedMessageEvents_ = 0;
     observedStationEvents_ = 0;
@@ -106,6 +111,8 @@ void ScreenManager::begin(
 void ScreenManager::update(
     std::uint32_t now,
     const Services::RadioService::ViewState& radioState,
+    const Services::SystemDiagnosticsService::ViewState& diagnosticsState,
+    const Services::OtaViewState& otaState,
     const Services::MessageStore::ViewState& messageState,
     const Services::StationStore::ViewState& stationState,
     const Services::WeatherStore::ViewState& weatherState,
@@ -122,6 +129,8 @@ void ScreenManager::update(
 
     settingsState_ = settingsState;
     radioState_ = &radioState;
+    diagnosticsState_ = diagnosticsState;
+    otaState_ = otaState;
     gpsState_ = gpsState;
     stationState_ = &stationState;
     weatherState_ = &weatherState;
@@ -174,6 +183,10 @@ void ScreenManager::update(
         SettingsScreen::processPending();
     } else if (currentScreen_ == App::ScreenId::DigiIgate) {
         DigiIgateScreen::processPending();
+    } else if (currentScreen_ == App::ScreenId::Tracker) {
+        TrackerScreen::processPending();
+    } else if (currentScreen_ == App::ScreenId::Beacon) {
+        BeaconScreen::processPending();
     } else if (currentScreen_ == App::ScreenId::Messages) {
         MessagesScreen::processPending();
     }
@@ -208,7 +221,8 @@ void ScreenManager::update(
     } else if (currentScreen_ == App::ScreenId::LoRaStatus) {
         LoRaScreen::update(radioState);
     } else if (currentScreen_ == App::ScreenId::Diagnostics) {
-        DiagnosticsScreen::update(radioState, now);
+        DiagnosticsScreen::update(
+            radioState, diagnosticsState, otaState, stationState, now);
     } else if (currentScreen_ == App::ScreenId::Messages) {
         MessagesScreen::update(messageState);
     } else if (currentScreen_ == App::ScreenId::GpsStatus) {
@@ -229,6 +243,8 @@ void ScreenManager::update(
         WeatherDetailScreen::update(selectedWeather_, reference, now);
     } else if (currentScreen_ == App::ScreenId::Tracker) {
         TrackerScreen::update(gpsState, trackerState, settingsState);
+    } else if (currentScreen_ == App::ScreenId::Beacon) {
+        BeaconScreen::update(gpsState, settingsState);
     } else if (currentScreen_ == App::ScreenId::Trail) {
         TrailScreen::update(trailState);
     } else if (currentScreen_ == App::ScreenId::Power) {
@@ -253,6 +269,8 @@ void ScreenManager::setMessage(const char* text) {
         SettingsScreen::setMessage(text);
     } else if (currentScreen_ == App::ScreenId::Tracker) {
         TrackerScreen::setMessage(text);
+    } else if (currentScreen_ == App::ScreenId::Beacon) {
+        BeaconScreen::setMessage(text);
     } else if (currentScreen_ == App::ScreenId::Trail) {
         TrailScreen::setMessage(text);
     } else if (currentScreen_ == App::ScreenId::DigiIgate) {
@@ -403,6 +421,15 @@ void ScreenManager::handleNavigation(App::NavigationAction action) {
         return;
     }
 
+    if (currentScreen_ == App::ScreenId::Beacon) {
+        if (action == App::NavigationAction::Confirm) {
+            BeaconScreen::send();
+        } else if (action == App::NavigationAction::Up || action == App::NavigationAction::Down) {
+            BeaconScreen::scroll(action == App::NavigationAction::Up ? -1 : 1);
+        }
+        return;
+    }
+
     if (currentScreen_ == App::ScreenId::Trail) {
         if (action == App::NavigationAction::Confirm) {
             TrailScreen::togglePause();
@@ -465,8 +492,9 @@ void ScreenManager::show(App::ScreenId screen) {
         LoRaScreen::create();
     } else if (screen == App::ScreenId::Diagnostics) {
         DiagnosticsScreen::create();
-        if (radioState_ != nullptr) {
-            DiagnosticsScreen::update(*radioState_, millis());
+        if (radioState_ != nullptr && stationState_ != nullptr) {
+            DiagnosticsScreen::update(
+                *radioState_, diagnosticsState_, otaState_, *stationState_, millis());
         }
     } else if (screen == App::ScreenId::Messages) {
         MessagesScreen::create(messageSendHandler_, messageSendContext_);
@@ -505,6 +533,12 @@ void ScreenManager::show(App::ScreenId screen) {
             trackerState_,
             trackerSaveHandler_,
             trackerSaveContext_);
+    } else if (screen == App::ScreenId::Beacon) {
+        BeaconScreen::create(
+            settingsState_,
+            gpsState_,
+            beaconActionHandler_,
+            beaconActionContext_);
     } else if (screen == App::ScreenId::Trail) {
         TrailScreen::create(trailState_, commandHandler_, commandContext_);
     } else if (screen == App::ScreenId::Power) {

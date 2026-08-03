@@ -39,6 +39,10 @@ public:
         std::uint32_t recoveryFailures = 0;
         std::uint32_t lastRxAtMs = 0;
         std::uint32_t lastTxAtMs = 0;
+        std::uint32_t lastCompletedTxSequence = 0;
+        std::uint32_t lastFailedTxSequence = 0;
+        std::uint32_t txCompletionRevision = 0;
+        std::uint32_t txFailureRevision = 0;
         float lastRssiDbm = 0.0F;
         float lastSnrDb = 0.0F;
         float lastFrequencyErrorHz = 0.0F;
@@ -78,7 +82,11 @@ public:
         std::uint32_t now,
         const SettingsService::ViewState& settings);
     bool sendTestPacket(const char* callsign, std::uint32_t now);
-    bool queueTrackerPacket(const char* frame, bool manual, std::uint32_t now);
+    bool queueTrackerPacket(
+        const char* frame,
+        bool manual,
+        std::uint32_t now,
+        std::uint32_t* sequenceOut = nullptr);
     bool sendTnc2(const char* frame, std::uint32_t now);
     bool queueMessage(
         const char* recipient,
@@ -133,8 +141,11 @@ private:
         std::uint32_t now,
         bool replaceSameSource = false,
         const char* tagPeer = nullptr,
-        const char* tagId = nullptr);
+        const char* tagId = nullptr,
+        std::uint32_t* sequenceOut = nullptr);
     void onTransmissionStarted(const TxQueue::Item& item, std::uint32_t now);
+    void onTransmissionCompleted(const TxQueue::Item& item, std::uint32_t now);
+    void onTransmissionFailed(const TxQueue::Item& item, std::uint32_t now);
 
     Drivers::Sx1278Driver driver_;
     StationStore stationStore_;
@@ -147,6 +158,8 @@ private:
     std::uint32_t lastTxCompletedAt_ = 0;
     std::uint32_t observedCompletedTransmissions_ = 0;
     bool wasTransmitting_ = false;
+    TxQueue::Item activeTxItem_ = {};
+    bool activeTxValid_ = false;
     std::uint32_t lastRecoveryAttemptAt_ = 0;
     std::uint32_t observedTransmitTimeouts_ = 0;
     std::uint32_t nextNoiseMeasurementAt_ = 0;

@@ -29,6 +29,26 @@ The station detail may contain:
 - complete stored TNC2 frame
 - complete APRS path analysis
 
+
+## Route badges in the list
+
+The latest path class is visible without opening the detail:
+
+```text
+OK1ABC-7   D
+OK2XYZ-9   1
+OK0AAA-2   2
+SERVER     I
+UNKNOWN    ?
+```
+
+- `D`: direct RF reception
+- `1`-`9+`: used RF digipeater-hop count
+- `I`: Internet/APRS-IS transport path
+- `?`: insufficient path information
+
+Internet receptions are counted separately and do not increase the direct-RF or repeated-RF counters.
+
 ## DIRECT versus VIA DIGI
 
 The parser keeps the complete path after the APRS destination. Path components ending in `*` are considered used digipeater elements.

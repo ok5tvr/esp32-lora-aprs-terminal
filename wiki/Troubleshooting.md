@@ -13,7 +13,7 @@ Stack canary watchpoint triggered (loopTask)
 StationStore::clear()
 ```
 
-Upgrade to v2.7.7 or later. The fix reconstructs the large station state directly in global storage instead of creating an approximately 8.5 kB temporary object on the Arduino loop-task stack.
+Upgrade to v2.7.8 or later. The fix reconstructs the large station state directly in global storage instead of creating an approximately 8.5 kB temporary object on the Arduino loop-task stack.
 
 If the installed firmware crashes before OTA starts, upload the corrected build through USB.
 
@@ -102,6 +102,15 @@ Correct the SD-card or directory problem, then disable and re-enable the Trail l
 - verify that the running build contains the OTA partition layout
 - use USB when the firmware crashes before OTA initialization
 
+
+### OTA reports no update partition or rejects the image
+
+- install v2.7.8 once with the complete USB Upload action
+- select only `.pio/build/waveshare-esp32-release/firmware.bin`
+- do not select `bootloader.bin`, `partitions.bin` or a filesystem image
+- verify the image is no larger than the maximum shown on the OTA page
+- after a failed upload, reconnect to the AP and read the displayed status
+
 ## Display appears off but radio continues
 
 This is normal battery power-saving behavior. The firmware turns off only the backlight. Touch once to wake it; the wake touch is not passed to the active button.
@@ -109,3 +118,11 @@ This is normal battery power-saving behavior. The firmware turns off only the ba
 ## Battery current is not shown
 
 The firmware can show charging state and configured charging limit, but not reliable live load current. Add an external INA219/INA226-class current monitor for numerical current measurement.
+
+## Diagnostics shows low memory
+
+- internal heap below 32 KB or loop-stack reserve below 2 KB is highlighted
+- note the historical minimum values after repeated screen navigation
+- restart and compare the values before enabling optional services
+- capture the serial log and exact screen/action if the minimum continues to fall
+- missing PSRAM should be investigated before long-term operation

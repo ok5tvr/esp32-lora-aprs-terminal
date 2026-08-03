@@ -14,6 +14,7 @@
 - [LoRa Radio and Diagnostics](LoRa-Radio-and-Diagnostics)
 - [GPS and Time](GPS-and-Time)
 - [Weather and Astronomy](Weather-and-Astronomy)
+- [APRS Beacon](APRS-Beacon)
 - [Tracker and Trail Logger](Tracker-and-Trail-Logger)
 - [DIGI and iGate](DIGI-and-iGate)
 - [Offline Map](Offline-Map)

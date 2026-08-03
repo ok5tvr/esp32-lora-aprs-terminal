@@ -20,6 +20,7 @@ enum class ScreenId : std::uint8_t {
     Weather,
     WeatherDetail,
     Tracker,
+    Beacon,
     Trail,
     Power,
     DigiIgate,
@@ -55,6 +56,18 @@ enum class TrackerPositionFormat : std::uint8_t {
 enum class TrackerBeaconMode : std::uint8_t {
     FixedInterval = 0,
     SmartBeacon = 1
+};
+
+enum class SmartBeaconProfile : std::uint8_t {
+    Car = 0,
+    Bicycle = 1,
+    Walking = 2
+};
+
+enum class AprsPath : std::uint8_t {
+    Direct = 0,
+    Wide1_1 = 1,
+    Wide2_2 = 2
 };
 
 enum class DigiMode : std::uint8_t {
@@ -133,8 +146,19 @@ using TrackerSettingsSaveHandler = bool (*)(
     TrackerPositionSource source,
     TrackerPositionFormat format,
     TrackerBeaconMode mode,
+    SmartBeaconProfile smartProfile,
     TrackerSymbol symbol,
+    AprsPath path,
+    const char* comment,
     std::uint32_t fixedIntervalSeconds,
+    char* errorText,
+    std::size_t errorTextCapacity,
+    void* context);
+using BeaconActionHandler = bool (*)(
+    TrackerPositionSource source,
+    AprsPath path,
+    const char* comment,
+    bool transmit,
     char* errorText,
     std::size_t errorTextCapacity,
     void* context);

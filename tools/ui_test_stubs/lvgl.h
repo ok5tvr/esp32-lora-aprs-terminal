@@ -11,7 +11,7 @@ using lv_event_cb_t = void (*)(lv_event_t*);
 inline lv_font_t lv_font_montserrat_14, lv_font_montserrat_16, lv_font_montserrat_18, lv_font_montserrat_22;
 constexpr int LV_EVENT_CLICKED=1, LV_EVENT_READY=2, LV_EVENT_CANCEL=3, LV_EVENT_VALUE_CHANGED=4, LV_EVENT_ALL=5;
 constexpr int LV_ALIGN_CENTER=0, LV_ALIGN_TOP_LEFT=1, LV_ALIGN_TOP_RIGHT=2, LV_ALIGN_TOP_MID=3, LV_ALIGN_BOTTOM_MID=4;
-constexpr int LV_OPA_COVER=255;
+constexpr int LV_OPA_COVER=255, LV_OPA_20=51;
 constexpr int LV_OBJ_FLAG_CLICKABLE=1;
 constexpr int LV_STATE_FOCUSED=1, LV_STATE_DISABLED=2;
 constexpr int LV_KEYBOARD_MODE_TEXT_UPPER=0, LV_KEYBOARD_MODE_NUMBER=1;

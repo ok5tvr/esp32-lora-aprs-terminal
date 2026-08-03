@@ -312,7 +312,11 @@ void DigiIgateService::ensureWifi(std::uint32_t now) {
 
     lastWifiAttemptAt_ = now;
     if (!wifiStarted_) {
-        WiFi.mode(WIFI_STA);
+        const wifi_mode_t currentMode = WiFi.getMode();
+        WiFi.mode(
+            currentMode == WIFI_AP || currentMode == WIFI_AP_STA
+                ? WIFI_AP_STA
+                : WIFI_STA);
         WiFi.setAutoReconnect(true);
         wifiStarted_ = true;
     } else {

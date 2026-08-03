@@ -51,11 +51,9 @@ stored entity has a position.
 `TrackerService` runs after radio and GPS updates on every main-loop pass. It is
 therefore independent of the Tracker UI. Its saved configuration selects GPS or
 default coordinates, uncompressed or compressed APRS position encoding, and a
-fixed interval or SmartBeacon schedule. The tracker submits a complete TNC2
-frame to the central `TxQueue`; normal OE/DL framing is applied once when the
-item is enqueued. A newer scheduled tracker frame replaces an older queued one.
-The non-blocking SX1278 driver receives only one selected queue item at a time
-and returns to continuous receive after TX.
+fixed interval or SmartBeacon schedule. SmartBeacon uses a saved car, bicycle or walking profile and confirms movement transitions before start/stop beacons.
+
+The tracker submits a complete TNC2 frame to the central `TxQueue`; normal OE/DL framing is applied once when the item is enqueued. Every queued item has a sequence number. `RadioService` retains the active item until the SX1278 reports success or failure and publishes the completed/failed sequence. `TrackerService` advances its timer and heading reference only when the matching sequence completes successfully. A newer scheduled tracker frame may replace an older queued one while retaining its sequence. The non-blocking SX1278 driver receives only one selected queue item at a time and returns to continuous receive after TX.
 
 ## Stopar route logging and SD scheduling
 
@@ -162,3 +160,24 @@ The calculation is not executed on every main-loop pass. The cached result is
 replaced only after the local date changes, the position source changes, or the
 terminal moves at least 5 km. The screen receives a read-only snapshot and
 formats all labels through the central Czech/English localization layer.
+
+## Stabilization diagnostics and OTA (2.7.8)
+
+`SystemDiagnosticsService` samples ESP-IDF heap capabilities and the FreeRTOS
+loop-task stack high-water mark once per second. It exposes only a compact
+read-only snapshot to LVGL. The service also records the boot reset reason and
+uptime. The Diagnostics screen combines this data with the existing radio RSSI
+history and TX-queue state.
+
+`OtaService` owns a local `WebServer` and uses the inactive Arduino OTA
+partition through `Update`. It buffers the initial application-image bytes,
+checks the ESP32 image header and application descriptor before starting Flash
+writes, then rejects over-size, interrupted or malformed uploads without
+scheduling a reboot. The 16 MB partition table contains `ota_0` and `ota_1`
+slots. `DigiIgateService` preserves AP+STA mode while reconnecting APRS-IS so
+the maintenance access point is not torn down by a station reconnect.
+
+APRS route parsing distinguishes direct RF, used RF digipeaters and Internet
+transport tokens. `StationStore` aggregates these classes separately, while the
+Received Stations screen renders a compact D/hop/I/? badge without changing the
+fixed 15-record memory model.

@@ -9,16 +9,16 @@ The firmware turns the classic Waveshare ESP32-Touch-LCD-3.5 board into a standa
 
 ## Current release
 
-This manual describes firmware **v2.7.7**.
+This manual describes firmware **v2.7.11**.
 
-Version 2.7.7 fixes the startup stack overflow found in v2.7.6 while preserving APRS route analysis, persistent battery history and Web OTA support.
+Version 2.7.11 adds SmartBeacon profiles for car, bicycle and walking, confirmed movement beacons and completed-RF-TX scheduling. The dedicated Beacon page and the A/B Web OTA layout remain available.
 
 ## Main capabilities
 
 - LoRa APRS reception and transmission on the Czech 433.775 MHz profile
 - Configurable custom LoRa profile
 - APRS station, object, item and weather decoding
-- DIRECT / VIA DIGI route analysis
+- D/1-9+/I/? route badges and full DIRECT / VIA DIGI / Internet route analysis
 - APRS text messaging with ACK and retry handling
 - GPS tracker with fixed interval or SmartBeacon scheduling
 - WIDE1/WIDE2 digipeater
@@ -26,8 +26,9 @@ Version 2.7.7 fixes the startup stack overflow found in v2.7.6 while preserving 
 - Offline map from microSD tiles
 - Independent GPS trail logger
 - Persistent battery history and power telemetry
+- Live heap, PSRAM, stack, uptime and reset diagnostics
 - Czech and English interface
-- Local Web OTA update at `192.168.4.1`
+- Validated A/B Web OTA update with progress and safe abort at `192.168.4.1`
 
 ## Start here
 
@@ -44,6 +45,7 @@ Version 2.7.7 fixes the startup stack overflow found in v2.7.6 while preserving 
 - [LoRa Radio and Diagnostics](LoRa-Radio-and-Diagnostics)
 - [GPS and Time](GPS-and-Time)
 - [Weather and Astronomy](Weather-and-Astronomy)
+- [APRS Beacon](APRS-Beacon)
 - [Tracker and Trail Logger](Tracker-and-Trail-Logger)
 - [DIGI and iGate](DIGI-and-iGate)
 - [Offline Map](Offline-Map)

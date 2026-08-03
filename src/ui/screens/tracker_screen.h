@@ -19,6 +19,7 @@ void update(
     const Services::TrackerService::ViewState& tracker,
     const Services::SettingsService::ViewState& settings);
 void save();
+void processPending();
 void scroll(int direction);
 void setMessage(const char* text);
 

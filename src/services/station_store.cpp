@@ -74,7 +74,9 @@ bool StationStore::ingest(
     updated.lastSnrDb = snrDb;
     updated.lastHeardMs = now;
     ++updated.heardCount;
-    updated.lastReceptionDirect = !frame.path.valid || frame.path.direct;
+    updated.lastRouteKnown = frame.path.valid;
+    updated.lastReceptionInternet = frame.path.valid && frame.path.internetRouted;
+    updated.lastReceptionDirect = frame.path.valid && frame.path.direct;
     updated.digipeaterHops = frame.path.valid ? frame.path.digipeaterHops : 0U;
     std::snprintf(updated.path, sizeof(updated.path), "%s", frame.path.path);
     std::snprintf(
@@ -82,11 +84,13 @@ bool StationStore::ingest(
         sizeof(updated.lastDigipeater),
         "%s",
         frame.path.lastDigipeater);
-    if (updated.lastReceptionDirect) {
+    if (updated.lastReceptionInternet) {
+        ++updated.internetReceptionCount;
+    } else if (updated.lastReceptionDirect) {
         ++updated.directReceptionCount;
         updated.hasDirectReception = true;
         updated.lastDirectHeardMs = now;
-    } else {
+    } else if (updated.lastRouteKnown) {
         ++updated.repeatedReceptionCount;
     }
     if (lastFrame != nullptr && lastFrame[0] != '\0') {

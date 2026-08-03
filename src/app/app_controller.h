@@ -14,6 +14,7 @@
 #include "services/power_service.h"
 #include "services/radio_service.h"
 #include "services/settings_service.h"
+#include "services/system_diagnostics_service.h"
 #include "services/trail_service.h"
 #include "services/time_service.h"
 #include "services/tracker_service.h"
@@ -72,8 +73,19 @@ private:
         TrackerPositionSource source,
         TrackerPositionFormat format,
         TrackerBeaconMode mode,
+        SmartBeaconProfile smartProfile,
         TrackerSymbol symbol,
+        AprsPath path,
+        const char* comment,
         std::uint32_t fixedIntervalSeconds,
+        char* errorText,
+        std::size_t errorTextCapacity,
+        void* context);
+    static bool beaconActionThunk(
+        TrackerPositionSource source,
+        AprsPath path,
+        const char* comment,
+        bool transmit,
         char* errorText,
         std::size_t errorTextCapacity,
         void* context);
@@ -118,8 +130,18 @@ private:
         TrackerPositionSource source,
         TrackerPositionFormat format,
         TrackerBeaconMode mode,
+        SmartBeaconProfile smartProfile,
         TrackerSymbol symbol,
+        AprsPath path,
+        const char* comment,
         std::uint32_t fixedIntervalSeconds,
+        char* errorText,
+        std::size_t errorTextCapacity);
+    bool handleBeaconAction(
+        TrackerPositionSource source,
+        AprsPath path,
+        const char* comment,
+        bool transmit,
         char* errorText,
         std::size_t errorTextCapacity);
     void updateReferencePosition();
@@ -129,6 +151,7 @@ private:
     Services::SettingsService settings_;
     Services::GpsService gps_;
     Services::PowerService power_;
+    Services::SystemDiagnosticsService diagnostics_;
     Services::TimeService time_;
     Services::AstronomyService astronomy_;
     Services::DisplayPowerService displayPower_;

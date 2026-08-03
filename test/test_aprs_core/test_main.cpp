@@ -196,6 +196,7 @@ void test_build_uncompressed_tracker_position() {
     TEST_ASSERT_TRUE(Aprs::buildPositionTnc2(
         "OK5TVR-15",
         "APRS",
+        nullptr,
         49.7366667,
         13.3850000,
         '/',
@@ -208,7 +209,7 @@ void test_build_uncompressed_tracker_position() {
         output,
         sizeof(output)));
     TEST_ASSERT_EQUAL_STRING(
-        "OK5TVR-15>APRS:!4944.20N/01323.10E>123/045 LoRa tracker",
+        "OK5TVR-15>APRS:=4944.20N/01323.10E>123/045 LoRa tracker",
         output);
 
     Aprs::ParsedFrame frame;
@@ -223,6 +224,7 @@ void test_build_compressed_tracker_position() {
     TEST_ASSERT_TRUE(Aprs::buildPositionTnc2(
         "OK5TVR-15",
         "APRS",
+        nullptr,
         49.7366667,
         13.3850000,
         '/',
@@ -235,6 +237,8 @@ void test_build_compressed_tracker_position() {
         output,
         sizeof(output)));
 
+    TEST_ASSERT_TRUE(std::strstr(output, ">APRS:=") != nullptr);
+
     Aprs::ParsedFrame frame;
     TEST_ASSERT_TRUE(Aprs::parseTnc2(output, frame));
     TEST_ASSERT_TRUE(frame.hasPosition);
@@ -244,10 +248,37 @@ void test_build_compressed_tracker_position() {
     TEST_ASSERT_DOUBLE_WITHIN(0.00002, 13.3850000, frame.longitude);
 }
 
+void test_compressed_tracker_comment_is_limited_to_40_characters() {
+    char output[192] = {};
+    TEST_ASSERT_TRUE(Aprs::buildPositionTnc2(
+        "OK5TVR-15", "APRS", nullptr,
+        49.7366667, 13.3850000, '/', '>', true,
+        false, 0.0, 0.0,
+        "1234567890123456789012345678901234567890EXTRA",
+        output, sizeof(output)));
+    const char* comment = std::strstr(output, " 1234567890");
+    TEST_ASSERT_TRUE(comment != nullptr);
+    TEST_ASSERT_EQUAL_UINT32(40U, std::strlen(comment + 1));
+    TEST_ASSERT_EQUAL_STRING(
+        "1234567890123456789012345678901234567890",
+        comment + 1);
+}
+
+void test_build_position_with_wide_path() {
+    char output[192] = {};
+    TEST_ASSERT_TRUE(Aprs::buildPositionTnc2(
+        "OK5TVR-15", "APRS", "WIDE1-1",
+        49.7366667, 13.3850000, '/', '>', false,
+        false, 0.0, 0.0, "Beacon", output, sizeof(output)));
+    TEST_ASSERT_EQUAL_STRING(
+        "OK5TVR-15>APRS,WIDE1-1:=4944.20N/01323.10E> Beacon",
+        output);
+}
+
 void test_build_tracker_rejects_invalid_position() {
     char output[64] = {};
     TEST_ASSERT_FALSE(Aprs::buildPositionTnc2(
-        "OK5TVR-15", "APRS", 91.0, 13.0, '/', '>', false,
+        "OK5TVR-15", "APRS", nullptr, 91.0, 13.0, '/', '>', false,
         false, 0.0, 0.0, "", output, sizeof(output)));
 }
 
@@ -370,7 +401,8 @@ void test_path_analysis_ignores_internet_tokens() {
         "OK1ABC>APRS,TCPIP*,qAC,T2SERVER:!4900.00N/01400.00E>internet",
         frame));
     TEST_ASSERT_TRUE(frame.path.valid);
-    TEST_ASSERT_TRUE(frame.path.direct);
+    TEST_ASSERT_FALSE(frame.path.direct);
+    TEST_ASSERT_TRUE(frame.path.internetRouted);
     TEST_ASSERT_EQUAL_UINT8(0, frame.path.digipeaterHops);
 }
 
@@ -380,6 +412,7 @@ void test_third_party_path_uses_inner_frame() {
         "IGATE>APRS,TCPIP*:}OK2AAA-5>APRS,OK0XYZ-2*,WIDE2-1:!4900.00N/01400.00E>inner",
         frame));
     TEST_ASSERT_EQUAL_STRING("OK2AAA-5", frame.source);
+    TEST_ASSERT_FALSE(frame.path.internetRouted);
     TEST_ASSERT_FALSE(frame.path.direct);
     TEST_ASSERT_EQUAL_UINT8(1, frame.path.digipeaterHops);
     TEST_ASSERT_EQUAL_STRING("OK0XYZ-2*,WIDE2-1", frame.path.path);
@@ -404,6 +437,8 @@ int main(int, char**) {
     RUN_TEST(test_third_party_frame_uses_inner_original_source);
     RUN_TEST(test_build_uncompressed_tracker_position);
     RUN_TEST(test_build_compressed_tracker_position);
+    RUN_TEST(test_compressed_tracker_comment_is_limited_to_40_characters);
+    RUN_TEST(test_build_position_with_wide_path);
     RUN_TEST(test_build_tracker_rejects_invalid_position);
     RUN_TEST(test_build_and_parse_aprs_message);
     RUN_TEST(test_build_and_parse_message_ack);

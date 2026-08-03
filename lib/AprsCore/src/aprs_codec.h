@@ -97,6 +97,7 @@ struct FrequencyData {
 struct PathData {
     bool valid = false;
     bool direct = true;
+    bool internetRouted = false;
     std::uint8_t digipeaterHops = 0;
     char path[MAX_PATH_LENGTH + 1] = {};
     char lastDigipeater[MAX_SOURCE_CALL_LENGTH + 1] = {};
@@ -189,12 +190,15 @@ bool buildMessageResponseTnc2(
     char* output,
     std::size_t outputCapacity);
 
+constexpr std::size_t COMPRESSED_POSITION_COMMENT_MAX = 40;
+
 // Builds a complete TNC2 APRS position frame. The uncompressed form uses
 // ddmm.mm/dddmm.mm coordinates. The compressed form uses the 13-character
 // Base-91 position field from APRS 1.0.1. Speed is supplied in knots.
 bool buildPositionTnc2(
     const char* callsign,
     const char* destination,
+    const char* path,
     double latitude,
     double longitude,
     char symbolTable,

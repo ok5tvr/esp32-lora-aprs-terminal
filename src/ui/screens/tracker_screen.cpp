@@ -1,11 +1,14 @@
 #include "ui/screens/tracker_screen.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <lvgl.h>
 
 #include "app/tracker_symbols.h"
+#include "app/smartbeacon_profiles.h"
+#include "app/aprs_path.h"
 #include "ui/ui_components.h"
 
 namespace Ui {
@@ -17,7 +20,10 @@ enum class Field : std::uint8_t {
     TrailEnabled,
     Source,
     Format,
+    Path,
+    Comment,
     Mode,
+    SmartProfile,
     Interval
 };
 
@@ -27,8 +33,14 @@ lv_obj_t* content = nullptr;
 lv_obj_t* gpsLabel = nullptr;
 lv_obj_t* statusLabel = nullptr;
 lv_obj_t* messageLabel = nullptr;
+lv_obj_t* lastReasonLabel = nullptr;
 lv_obj_t* symbolDropdown = nullptr;
-lv_obj_t* valueLabels[6] = {};
+lv_obj_t* valueLabels[9] = {};
+lv_obj_t* editorOverlay = nullptr;
+lv_obj_t* editorArea = nullptr;
+bool pendingOpenEditor = false;
+bool pendingCloseEditor = false;
+bool acceptEditor = false;
 
 App::TrackerSettingsSaveHandler saveHandler = nullptr;
 void* saveContext = nullptr;
@@ -37,7 +49,10 @@ bool draftTrailEnabled = false;
 App::TrackerPositionSource draftSource = App::TrackerPositionSource::Gps;
 App::TrackerPositionFormat draftFormat = App::TrackerPositionFormat::Uncompressed;
 App::TrackerBeaconMode draftMode = App::TrackerBeaconMode::FixedInterval;
+App::SmartBeaconProfile draftSmartProfile = App::SmartBeaconProfile::Car;
 App::TrackerSymbol draftSymbol = App::TrackerSymbol::Car;
+App::AprsPath draftPath = App::AprsPath::Wide1_1;
+char draftComment[Services::SettingsService::APRS_COMMENT_CAPACITY] = {};
 App::UiLanguage language = App::UiLanguage::Czech;
 std::uint32_t draftInterval = 300;
 std::uint32_t observedSettingsRevision = 0xFFFFFFFFU;
@@ -48,6 +63,13 @@ bool english() {
 
 const char* text(const char* czech, const char* englishText) {
     return english() ? englishText : czech;
+}
+
+void copyText(char* output, std::size_t capacity, const char* value) {
+    if (output == nullptr || capacity == 0) {
+        return;
+    }
+    std::snprintf(output, capacity, "%s", value != nullptr ? value : "");
 }
 
 bool isSuccessMessage(const char* value) {
@@ -75,6 +97,24 @@ const char* modeText(App::TrackerBeaconMode mode) {
         : text("PEVNY CAS", "FIXED TIME");
 }
 
+void showSmartProfileSummary() {
+    const App::SmartBeaconProfileDefinition& profile =
+        App::smartBeaconProfileDefinition(draftSmartProfile);
+    char summary[160];
+    std::snprintf(
+        summary,
+        sizeof(summary),
+        english()
+            ? "%s: %.1f-%.0f km/h, slow/fast %u/%u s"
+            : "%s: %.1f-%.0f km/h, pomalu/rychle %u/%u s",
+        App::smartBeaconProfileLabel(draftSmartProfile, language),
+        static_cast<double>(profile.lowSpeedKmh),
+        static_cast<double>(profile.highSpeedKmh),
+        static_cast<unsigned>(profile.slowRateSeconds),
+        static_cast<unsigned>(profile.fastRateSeconds));
+    setMessage(summary);
+}
+
 void refreshDraftLabels() {
     if (valueLabels[0] == nullptr) {
         return;
@@ -83,10 +123,15 @@ void refreshDraftLabels() {
     lv_label_set_text(valueLabels[1], draftTrailEnabled ? text("ZAPNUT", "ON") : text("VYPNUT", "OFF"));
     lv_label_set_text(valueLabels[2], sourceText(draftSource));
     lv_label_set_text(valueLabels[3], formatText(draftFormat));
-    lv_label_set_text(valueLabels[4], modeText(draftMode));
+    lv_label_set_text(valueLabels[4], App::aprsPathLabel(draftPath));
+    lv_label_set_text(valueLabels[5], modeText(draftMode));
+    lv_label_set_text(
+        valueLabels[6],
+        App::smartBeaconProfileLabel(draftSmartProfile, language));
     char interval[32];
     std::snprintf(interval, sizeof(interval), "%u s", static_cast<unsigned>(draftInterval));
-    lv_label_set_text(valueLabels[5], interval);
+    lv_label_set_text(valueLabels[7], interval);
+    lv_label_set_text(valueLabels[8], draftComment);
 }
 
 void copyFromSettings(const Services::SettingsService::ViewState& settings) {
@@ -96,7 +141,10 @@ void copyFromSettings(const Services::SettingsService::ViewState& settings) {
     draftSource = settings.trackerSource;
     draftFormat = settings.trackerFormat;
     draftMode = settings.trackerMode;
+    draftSmartProfile = settings.trackerSmartProfile;
     draftSymbol = settings.trackerSymbol;
+    draftPath = settings.trackerPath;
+    copyText(draftComment, sizeof(draftComment), settings.trackerComment);
     draftInterval = settings.trackerFixedIntervalSeconds;
     observedSettingsRevision = settings.revision;
     refreshDraftLabels();
@@ -155,6 +203,13 @@ void fieldClicked(lv_event_t* event) {
                 ? App::TrackerPositionFormat::Compressed
                 : App::TrackerPositionFormat::Uncompressed;
             break;
+        case Field::Path:
+            draftPath = static_cast<App::AprsPath>(
+                (static_cast<std::uint8_t>(draftPath) + 1U) % 3U);
+            break;
+        case Field::Comment:
+            pendingOpenEditor = true;
+            break;
         case Field::Mode:
             if (draftMode == App::TrackerBeaconMode::FixedInterval) {
                 if (draftSource != App::TrackerPositionSource::Gps) {
@@ -163,15 +218,88 @@ void fieldClicked(lv_event_t* event) {
                         "SmartBeacon requires the GPS position source."));
                 } else {
                     draftMode = App::TrackerBeaconMode::SmartBeacon;
+                    showSmartProfileSummary();
                 }
             } else {
                 draftMode = App::TrackerBeaconMode::FixedInterval;
             }
             break;
+        case Field::SmartProfile:
+            draftSmartProfile = static_cast<App::SmartBeaconProfile>(
+                (static_cast<std::uint8_t>(draftSmartProfile) + 1U) % 3U);
+            showSmartProfileSummary();
+            break;
         case Field::Interval:
             cycleInterval();
             break;
     }
+    refreshDraftLabels();
+}
+
+void keyboardEvent(lv_event_t* event) {
+    const lv_event_code_t code = lv_event_get_code(event);
+    if (code == LV_EVENT_READY) {
+        acceptEditor = true;
+        pendingCloseEditor = true;
+    } else if (code == LV_EVENT_CANCEL) {
+        acceptEditor = false;
+        pendingCloseEditor = true;
+    }
+}
+
+void openCommentEditor() {
+    if (editorOverlay != nullptr) {
+        return;
+    }
+    editorOverlay = lv_obj_create(lv_scr_act());
+    lv_obj_remove_style_all(editorOverlay);
+    lv_obj_set_size(editorOverlay, 480, 320);
+    lv_obj_align(editorOverlay, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_bg_color(editorOverlay, lv_color_hex(0x0B1424), 0);
+    lv_obj_set_style_bg_opa(editorOverlay, LV_OPA_COVER, 0);
+    lv_obj_add_flag(editorOverlay, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_move_foreground(editorOverlay);
+
+    lv_obj_t* title = lv_label_create(editorOverlay);
+    lv_label_set_text(title, text("Komentar trackeru", "Tracker comment"));
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xF4F7FF), 0);
+    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 14, 8);
+
+    editorArea = lv_textarea_create(editorOverlay);
+    lv_obj_set_size(editorArea, 452, 43);
+    lv_obj_align(editorArea, LV_ALIGN_TOP_MID, 0, 38);
+    lv_textarea_set_one_line(editorArea, true);
+    lv_textarea_set_text(editorArea, draftComment);
+    lv_textarea_set_max_length(
+        editorArea,
+        Services::SettingsService::APRS_COMMENT_CAPACITY - 1);
+    lv_obj_set_style_text_font(editorArea, &lv_font_montserrat_18, 0);
+
+    lv_obj_t* keyboard = lv_keyboard_create(editorOverlay);
+    lv_obj_set_size(keyboard, 468, 228);
+    lv_obj_align(keyboard, LV_ALIGN_BOTTOM_MID, 0, -2);
+    lv_keyboard_set_textarea(keyboard, editorArea);
+    lv_keyboard_set_mode(keyboard, LV_KEYBOARD_MODE_TEXT_LOWER);
+    lv_obj_add_event_cb(keyboard, keyboardEvent, LV_EVENT_ALL, nullptr);
+    lv_obj_add_state(editorArea, LV_STATE_FOCUSED);
+}
+
+void closeCommentEditor() {
+    if (editorOverlay == nullptr) {
+        return;
+    }
+    if (acceptEditor && editorArea != nullptr) {
+        copyText(
+            draftComment,
+            sizeof(draftComment),
+            lv_textarea_get_text(editorArea));
+    }
+    lv_obj_del(editorOverlay);
+    editorOverlay = nullptr;
+    editorArea = nullptr;
+    pendingCloseEditor = false;
+    acceptEditor = false;
     refreshDraftLabels();
 }
 
@@ -264,8 +392,11 @@ void createFieldRow(
     lv_obj_align(hintLabel, LV_ALIGN_BOTTOM_LEFT, 0, -2);
 
     valueLabels[valueIndex] = lv_label_create(row);
+    lv_obj_set_width(valueLabels[valueIndex], valueIndex == 8 ? 220 : 150);
+    lv_label_set_long_mode(valueLabels[valueIndex], LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_font(valueLabels[valueIndex], &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(valueLabels[valueIndex], lv_color_hex(0x56C7FF), 0);
+    lv_obj_set_style_text_align(valueLabels[valueIndex], LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_align(valueLabels[valueIndex], LV_ALIGN_RIGHT_MID, 0, 0);
 }
 
@@ -282,6 +413,12 @@ void create(
     saveContext = context;
     language = settings.uiLanguage;
     symbolDropdown = nullptr;
+    lastReasonLabel = nullptr;
+    editorOverlay = nullptr;
+    editorArea = nullptr;
+    pendingOpenEditor = false;
+    pendingCloseEditor = false;
+    acceptEditor = false;
     for (lv_obj_t*& valueLabel : valueLabels) {
         valueLabel = nullptr;
     }
@@ -339,15 +476,30 @@ void create(
         3);
     createSymbolRow();
     createFieldRow(
+        "APRS path",
+        text("Direct / WIDE1-1 / WIDE2-2", "Direct / WIDE1-1 / WIDE2-2"),
+        Field::Path,
+        4);
+    createFieldRow(
+        text("Komentar", "Comment"),
+        text("Komprimovany format odesle max. 40 znaku", "Compressed format sends up to 40 characters"),
+        Field::Comment,
+        8);
+    createFieldRow(
         text("Planovani", "Scheduling"),
         text("Pevny interval / SmartBeacon", "Fixed interval / SmartBeacon"),
         Field::Mode,
-        4);
+        5);
+    createFieldRow(
+        text("Smart profil", "Smart profile"),
+        text("Auto / kolo / chuze", "Car / bicycle / walking"),
+        Field::SmartProfile,
+        6);
     createFieldRow(
         "Interval",
         text("Pouziva se v rezimu pevny cas", "Used in fixed interval mode"),
         Field::Interval,
-        5);
+        7);
 
     lv_obj_t* saveButton = lv_btn_create(content);
     lv_obj_set_size(saveButton, 438, 40);
@@ -359,6 +511,12 @@ void create(
         text("Ulozit nastaveni trackeru", "Save tracker settings"));
     lv_obj_set_style_text_font(saveButtonLabel, &lv_font_montserrat_16, 0);
     lv_obj_center(saveButtonLabel);
+
+    lastReasonLabel = lv_label_create(content);
+    lv_obj_set_width(lastReasonLabel, 430);
+    lv_label_set_long_mode(lastReasonLabel, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_font(lastReasonLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(lastReasonLabel, lv_color_hex(0x56C7FF), 0);
 
     messageLabel = lv_label_create(content);
     lv_obj_set_width(messageLabel, 430);
@@ -411,6 +569,15 @@ void update(
     }
     lv_label_set_text(gpsLabel, gpsText);
     lv_label_set_text(statusLabel, tracker.statusText);
+    if (lastReasonLabel != nullptr) {
+        char reason[96];
+        std::snprintf(
+            reason,
+            sizeof(reason),
+            english() ? "Last completed beacon: %s" : "Posledni beacon: %s",
+            tracker.lastBeaconReason);
+        lv_label_set_text(lastReasonLabel, reason);
+    }
     lv_obj_set_style_text_color(
         statusLabel,
         tracker.active ? lv_color_hex(0x42D392) : lv_color_hex(0xFFB454),
@@ -428,7 +595,10 @@ void save() {
         draftSource,
         draftFormat,
         draftMode,
+        draftSmartProfile,
         draftSymbol,
+        draftPath,
+        draftComment,
         draftInterval,
         error,
         sizeof(error),
@@ -439,6 +609,16 @@ void save() {
                 "Nastaveni trackeru bylo ulozeno do NVS.",
                 "Tracker settings were saved to NVS.")
             : error);
+}
+
+void processPending() {
+    if (pendingOpenEditor) {
+        pendingOpenEditor = false;
+        openCommentEditor();
+    }
+    if (pendingCloseEditor) {
+        closeCommentEditor();
+    }
 }
 
 void scroll(int direction) {

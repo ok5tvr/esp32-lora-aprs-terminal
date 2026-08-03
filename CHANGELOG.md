@@ -1,5 +1,47 @@
 # Changelog
 
+## 2.7.11
+
+- Added selectable SmartBeacon profiles for **Car**, **Bicycle** and **Walking** with independent speed thresholds, adaptive intervals, turn sensitivity and confirmed movement transitions.
+- Added start-moving and stopped beacons with profile-specific confirmation times to suppress GPS jitter.
+- Tracker scheduling now advances only after the SX1278 reports a successfully completed RF transmission, not merely after queue insertion.
+- Added TX sequence tracking through the central queue so completion and failure events are matched to the exact Tracker or BOOT beacon.
+- Added retry handling for RF failure or missing TX confirmation.
+- Course is no longer retained or transmitted at unreliable near-zero speed.
+- Position frames now use the APRS `=` data identifier because the terminal supports APRS messaging.
+- Compressed-position comments are safely limited to the APRS maximum of 40 characters; standard position comments retain the configured 48-character capacity.
+- Added the last completed beacon reason to the Tracker page.
+
+## 2.7.10
+
+- Fixed Web OTA compilation with Arduino-ESP32 Update library versions whose `Update.write()` API accepts a mutable `uint8_t*` buffer.
+- No functional change to Beacon, Tracker, route analysis, or OTA validation.
+
+## 2.7.9
+
+- Added a dedicated **Beacon** item to the main menu for one-shot APRS position transmissions.
+- Beacon position source can be selected independently as current GPS or the saved default position.
+- Beacon settings store an independent printable comment of up to 48 characters and a selectable `DIRECT`, `WIDE1-1` or `WIDE2-2` path in NVS.
+- Added separate Save and Send-now actions; sending validates the radio, GPS fix when required, packet length and TX queue availability.
+- Beacon packets use the currently selected Tracker APRS symbol and compressed/uncompressed position format.
+- Extended Tracker settings with an editable comment and selectable APRS path.
+- Scheduled Tracker, SmartBeacon and manual BOOT-button position packets all use the saved Tracker comment and path.
+- Extended the APRS position encoder with validated optional TNC2 path insertion.
+- Added host tests for path-bearing position frames, new persistent settings, menu ordering and modified UI/controller syntax.
+
+## 2.7.8
+
+- Added live system diagnostics for free internal heap, largest contiguous internal block, historical minimum heap, free PSRAM, loop-task stack reserve, uptime and the last ESP32 reset reason.
+- Added warning colours for low internal heap and low loop-task stack reserve on the Diagnostics screen.
+- Added compact route badges to the Received Stations list: `D` for direct RF, `1`-`9+` for used RF digipeater hops, `I` for APRS-IS/Internet paths and `?` when the route cannot be classified.
+- Extended APRS path parsing so `TCPIP`, `TCPXX` and `qA...` paths are explicitly classified as Internet-routed instead of direct RF reception.
+- Completed Web OTA with a status endpoint, upload progress, safe stop control, application-image validation, OTA-slot size checks and clean abort handling.
+- Added validation of the ESP32 application descriptor magic, preventing bootloader, partition-table, filesystem and unrelated binary images from being written as firmware.
+- Corrected the 16 MB Flash layout to two 7 MB A/B OTA application slots with dedicated NVS, OTA metadata, SPIFFS and coredump partitions.
+- Preserved the OTA access point while the APRS-IS iGate reconnects by keeping Wi-Fi in AP+STA mode.
+- Avoided a large temporary station-state object when the Diagnostics screen is opened before station data is available.
+- Added host tests for OTA image validation, OTA partition geometry, APRS Internet-path classification, route aggregation and the updated UI/service syntax.
+
 ## 2.7.7
 
 - Added a complete 21-page English GitHub Wiki source under `wiki/`.

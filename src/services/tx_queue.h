@@ -57,7 +57,8 @@ public:
         std::uint32_t now,
         bool replaceSameSource = false,
         const char* tagPeer = nullptr,
-        const char* tagId = nullptr);
+        const char* tagId = nullptr,
+        std::uint32_t* sequenceOut = nullptr);
     bool peek(Item& item, std::size_t& index) const;
     bool pop(std::size_t index, Item& item);
     bool contains(Source source) const;

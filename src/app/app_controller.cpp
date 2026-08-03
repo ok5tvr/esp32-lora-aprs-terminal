@@ -8,6 +8,9 @@
 
 #include "app_config.h"
 #include "app/localization.h"
+#include "app/aprs_path.h"
+#include "app/tracker_symbols.h"
+#include <aprs_codec.h>
 #include "app_log.h"
 #include "drivers/display_driver.h"
 #include "drivers/lvgl_port.h"
@@ -60,6 +63,8 @@ bool AppController::begin() {
         static_cast<unsigned>(ESP.getFlashChipSize() / (1024U * 1024U)),
         static_cast<unsigned>(ESP.getPsramSize() / (1024U * 1024U)),
         psramFound() ? "" : " (not detected)");
+
+    diagnostics_.begin(millis());
 
     // Load the persistent language before hardware services create their
     // first user-visible status strings.
@@ -129,6 +134,8 @@ bool AppController::begin() {
         this,
         trackerSettingsSaveThunk,
         this,
+        beaconActionThunk,
+        this,
         mapPanThunk,
         this);
     LOG_I(
@@ -194,9 +201,13 @@ void AppController::update() {
         screens_.currentScreen() == App::ScreenId::Map,
         referencePosition_);
 
+    diagnostics_.update(now);
+
     screens_.update(
         now,
         radio_.viewState(),
+        diagnostics_.viewState(),
+        ota_.viewState(),
         radio_.messageViewState(),
         radio_.stationViewState(),
         radio_.weatherViewState(),
@@ -216,8 +227,8 @@ void AppController::update() {
         observedManualPacketsSent_ = trackerState.manualPacketsSent;
         screens_.setMessage(
             Localization::text(
-                "BOOT: pozicni beacon byl zarazen do TX fronty.",
-                "BOOT: position beacon was queued for transmission."));
+                "BOOT: pozicni beacon byl uspesne odvysilan.",
+                "BOOT: position beacon was transmitted successfully."));
     } else if (trackerState.manualBeaconFailures != observedManualBeaconFailures_) {
         observedManualBeaconFailures_ = trackerState.manualBeaconFailures;
         screens_.setMessage(trackerState.statusText);
@@ -339,7 +350,10 @@ bool AppController::trackerSettingsSaveThunk(
     TrackerPositionSource source,
     TrackerPositionFormat format,
     TrackerBeaconMode mode,
+    SmartBeaconProfile smartProfile,
     TrackerSymbol symbol,
+    AprsPath path,
+    const char* comment,
     std::uint32_t fixedIntervalSeconds,
     char* errorText,
     std::size_t errorTextCapacity,
@@ -354,8 +368,32 @@ bool AppController::trackerSettingsSaveThunk(
         source,
         format,
         mode,
+        smartProfile,
         symbol,
+        path,
+        comment,
         fixedIntervalSeconds,
+        errorText,
+        errorTextCapacity);
+}
+
+bool AppController::beaconActionThunk(
+    TrackerPositionSource source,
+    AprsPath path,
+    const char* comment,
+    bool transmit,
+    char* errorText,
+    std::size_t errorTextCapacity,
+    void* context) {
+
+    if (context == nullptr) {
+        return false;
+    }
+    return static_cast<AppController*>(context)->handleBeaconAction(
+        source,
+        path,
+        comment,
+        transmit,
         errorText,
         errorTextCapacity);
 }
@@ -447,7 +485,10 @@ bool AppController::saveTrackerSettings(
     TrackerPositionSource source,
     TrackerPositionFormat format,
     TrackerBeaconMode mode,
+    SmartBeaconProfile smartProfile,
     TrackerSymbol symbol,
+    AprsPath path,
+    const char* comment,
     std::uint32_t fixedIntervalSeconds,
     char* errorText,
     std::size_t errorTextCapacity) {
@@ -488,10 +529,103 @@ bool AppController::saveTrackerSettings(
         source,
         format,
         mode,
+        smartProfile,
         symbol,
+        path,
+        comment,
         fixedIntervalSeconds,
         errorText,
         errorTextCapacity);
+}
+
+bool AppController::handleBeaconAction(
+    TrackerPositionSource source,
+    AprsPath path,
+    const char* comment,
+    bool transmit,
+    char* errorText,
+    std::size_t errorTextCapacity) {
+
+    if (!settings_.saveBeacon(source, path, comment, errorText, errorTextCapacity)) {
+        return false;
+    }
+    if (!transmit) {
+        return true;
+    }
+    if (!radio_.viewState().initialized) {
+        copyError(
+            errorText,
+            errorTextCapacity,
+            Localization::text("Radio neni inicializovano.", "Radio is not initialized."));
+        return false;
+    }
+
+    const Services::SettingsService::ViewState& settings = settings_.viewState();
+    const Services::GpsService::ViewState& gps = gps_.viewState();
+    double latitude = settings.defaultLatitude;
+    double longitude = settings.defaultLongitude;
+    bool includeCourseSpeed = false;
+    double courseDegrees = 0.0;
+    double speedKnots = 0.0;
+
+    if (source == TrackerPositionSource::Gps) {
+        if (!gps.receiverDetected || !gps.hasFix) {
+            copyError(
+                errorText,
+                errorTextCapacity,
+                Localization::text(
+                    "Beacon nelze odeslat: GPS nema platny fix.",
+                    "The beacon cannot be sent: GPS has no valid fix."));
+            return false;
+        }
+        latitude = gps.latitude;
+        longitude = gps.longitude;
+        includeCourseSpeed = gps.speedValid && gps.courseValid;
+        courseDegrees = gps.courseDegrees;
+        speedKnots = includeCourseSpeed
+            ? static_cast<double>(gps.speedKmh) / 1.852
+            : 0.0;
+    }
+
+    const TrackerSymbolDefinition& symbol =
+        trackerSymbolDefinition(settings.trackerSymbol);
+    char frame[192] = {};
+    if (!Aprs::buildPositionTnc2(
+            settings.callsign,
+            AppConfig::APRS_DESTINATION,
+            aprsPathTnc2(path),
+            latitude,
+            longitude,
+            symbol.table,
+            symbol.code,
+            settings.trackerFormat == TrackerPositionFormat::Compressed,
+            includeCourseSpeed,
+            courseDegrees,
+            speedKnots,
+            settings.beaconComment,
+            frame,
+            sizeof(frame))) {
+        copyError(
+            errorText,
+            errorTextCapacity,
+            Localization::text(
+                "Sestaveni APRS beaconu se nepodarilo.",
+                "Building the APRS beacon failed."));
+        return false;
+    }
+    if (!radio_.queueTrackerPacket(frame, true, millis())) {
+        copyError(
+            errorText,
+            errorTextCapacity,
+            Localization::text(
+                "TX fronta je plna; beacon nebyl zarazen.",
+                "The TX queue is full; the beacon was not queued."));
+        return false;
+    }
+
+    copyError(errorText, errorTextCapacity, "");
+    LOG_I("BEACON", "TX queued %s", frame);
+    return true;
 }
 
 bool AppController::sendMessage(

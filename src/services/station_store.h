@@ -28,10 +28,13 @@ public:
         float lastSnrDb = 0.0F;
         std::uint32_t lastHeardMs = 0;
         std::uint32_t heardCount = 0;
+        bool lastRouteKnown = false;
         bool lastReceptionDirect = true;
+        bool lastReceptionInternet = false;
         std::uint8_t digipeaterHops = 0;
         std::uint32_t directReceptionCount = 0;
         std::uint32_t repeatedReceptionCount = 0;
+        std::uint32_t internetReceptionCount = 0;
         bool hasDirectReception = false;
         std::uint32_t lastDirectHeardMs = 0;
         char path[Aprs::MAX_PATH_LENGTH + 1] = {};

@@ -48,6 +48,21 @@ int main() {
     assert(updated.lastDirectHeardMs == 9000U);
     assert(updated.path[0] == '\0');
 
+    assert(Aprs::parseTnc2(
+        "OK1ABC-7>APRS,TCPIP*,qAC,T2TEST:!4900.00N/01400.00E>internet",
+        frame));
+    assert(frame.path.internetRouted);
+    assert(!frame.path.direct);
+    assert(frame.path.digipeaterHops == 0U);
+    assert(store.ingest(frame, 0.0F, 0.0F, 12000U, "internet"));
+    const auto& internet = store.viewState().stations[0];
+    assert(internet.lastReceptionInternet);
+    assert(!internet.lastReceptionDirect);
+    assert(internet.internetReceptionCount == 1U);
+    assert(internet.directReceptionCount == 2U);
+    assert(internet.repeatedReceptionCount == 1U);
+    assert(internet.lastDirectHeardMs == 9000U);
+
     std::cout << "station route analysis tests passed\n";
     return 0;
 }

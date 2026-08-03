@@ -15,6 +15,7 @@ public:
     static constexpr std::size_t WIFI_PASSWORD_CAPACITY = 65;
     static constexpr std::size_t APRS_IS_SERVER_CAPACITY = 64;
     static constexpr std::size_t APRS_IS_FILTER_CAPACITY = 80;
+    static constexpr std::size_t APRS_COMMENT_CAPACITY = 49;
 
     struct ViewState {
         char callsign[CALLSIGN_CAPACITY] = {};
@@ -25,8 +26,14 @@ public:
         App::TrackerPositionSource trackerSource = App::TrackerPositionSource::Gps;
         App::TrackerPositionFormat trackerFormat = App::TrackerPositionFormat::Uncompressed;
         App::TrackerBeaconMode trackerMode = App::TrackerBeaconMode::FixedInterval;
+        App::SmartBeaconProfile trackerSmartProfile = App::SmartBeaconProfile::Car;
         App::TrackerSymbol trackerSymbol = App::TrackerSymbol::Car;
+        App::AprsPath trackerPath = App::AprsPath::Wide1_1;
+        char trackerComment[APRS_COMMENT_CAPACITY] = {};
         std::uint32_t trackerFixedIntervalSeconds = 300;
+        App::TrackerPositionSource beaconSource = App::TrackerPositionSource::DefaultPosition;
+        App::AprsPath beaconPath = App::AprsPath::Wide1_1;
+        char beaconComment[APRS_COMMENT_CAPACITY] = {};
         bool digiEnabled = false;
         App::DigiMode digiMode = App::DigiMode::FillInWide1;
         std::uint8_t digiMaxWideHops = 2;
@@ -74,8 +81,17 @@ public:
         App::TrackerPositionSource source,
         App::TrackerPositionFormat format,
         App::TrackerBeaconMode mode,
+        App::SmartBeaconProfile smartProfile,
         App::TrackerSymbol symbol,
+        App::AprsPath path,
+        const char* comment,
         std::uint32_t fixedIntervalSeconds,
+        char* errorText,
+        std::size_t errorTextCapacity);
+    bool saveBeacon(
+        App::TrackerPositionSource source,
+        App::AprsPath path,
+        const char* comment,
         char* errorText,
         std::size_t errorTextCapacity);
     bool saveDigiIgate(

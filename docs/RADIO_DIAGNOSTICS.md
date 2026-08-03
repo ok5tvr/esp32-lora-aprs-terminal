@@ -1,29 +1,48 @@
-# Diagnostika RSSI kanalu
+# Radio and system diagnostics
 
-Firmware 1.5.0 pridava samostatnou obrazovku **Diagnostika**.
+Firmware v2.7.8 combines the LoRa background-RSSI graph with live ESP32 resource diagnostics.
 
-## Princip
+## Background RSSI history
 
-- frekvence je stejna jako aktivni LoRa APRS frekvence z `lora_profile.h`
-- prvni automaticke mereni se provede priblizne 15 sekund po startu
-- dalsi body se ukladaji po 300 sekundach
-- jeden bod je prumer 8 okamzitych RSSI hodnot odebranych po 25 ms
-- soucasne se uklada nejsilnejsi hodnota v danem mericim okne
-- RAM historie obsahuje maximalne 20 bodu; po naplneni se nejstarsi odstrani
-- historie se po restartu neobnovuje a nezapisuje se na SD kartu
+- measurements use the currently active LoRa frequency
+- the first automatic sample is taken about 15 seconds after startup
+- later points are stored every 300 seconds
+- each point contains the average and peak of eight RSSI reads separated by 25 ms
+- the RAM history contains at most 20 points
+- the history is cleared after a successful RF profile change
+- the RSSI history is not restored after reboot
 
-## Ochrana prijmu a vysilani
+A measurement starts only while the SX1278 is in receive mode and the central TX queue is empty. If transmission starts, the sample is cancelled and retried later.
 
-Merici burst zacne pouze pokud je SX1278 v RX rezimu a centralni TX fronta je
-prazdna. Pokud se mezitim rozbehne TX nebo se paket zaradi do fronty, rozdelane
-mereni se zrusi a zopakuje za pet sekund. Cteni aktualniho RSSI je kratka SPI
-operace a radio zustava v prijimacim rezimu.
+Less negative RSSI means stronger channel activity. The graph is not a calibrated spectrum analyser and may include receiver noise, unrelated signals or valid LoRa packets.
 
-## Interpretace
+## System values
 
-Graf nezobrazuje laboratorne kalibrovane ruseni ani procentualni obsazenost kanalu. Zobrazuje aktualni RSSI kanalu
-v okamziku mereni. Do hodnoty se muze promítnout sum prijimace, cizi signal i
-platny LoRa paket. Mene zaporna hodnota znamena silnejsi aktivitu, napriklad
--80 dBm je vyssi uroven nez -120 dBm.
+The Diagnostics screen refreshes the following values once per second:
 
-Modra krivka zobrazuje prumer mericiho okna, oranzova jeho spicku.
+- free internal heap
+- largest contiguous internal-heap block
+- historical minimum free internal heap
+- free and largest PSRAM block
+- minimum observed free stack reserve of the Arduino `loopTask`
+- stored station count
+- TX queue depth and high-water mark
+- device uptime
+- last ESP32 reset reason
+- current OTA status and connected OTA client count
+
+The stack value is derived from the FreeRTOS high-water mark and is displayed in bytes. It is a minimum observed reserve, not the current stack use.
+
+## Warning thresholds
+
+The interface highlights:
+
+- internal heap below 32 KB
+- loop-task stack reserve below 2 KB
+- missing PSRAM
+
+A decreasing historical minimum heap or stack reserve during repeated navigation may indicate a leak, excessive temporary object or unexpectedly deep call path.
+
+## Restart reasons
+
+Reported reasons include power-on, software reset, panic/watchdog, deep sleep, brownout and SDIO reset where supported by the installed ESP-IDF version. The numeric ESP reset code is retained alongside the human-readable text.

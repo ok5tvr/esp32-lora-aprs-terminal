@@ -31,7 +31,7 @@ For the first installation of an OTA-capable version, upload the complete projec
 A normal serial startup contains lines similar to:
 
 ```text
-[I][APP] LoRa APRS Terminal v2.7.7
+[I][APP] LoRa APRS Terminal v2.7.9
 [I][DISPLAY] Ready: 480 x 320 on VSPI
 [I][POWER] AXP2101 ready
 [I][TOUCH] Ready
@@ -90,4 +90,4 @@ The onboard BOOT button can send a one-shot position beacon:
 - if the display is fully off, the first press only wakes it
 - do not hold BOOT during reset or power-on
 
-A manual beacon uses the saved tracker source, packet format and APRS symbol. Ensure that transmitting is legal at your location and that an antenna is connected.
+A manual BOOT beacon uses the saved Tracker source, packet format, APRS symbol, path and comment. The separate **Beacon** page can send a one-shot packet with its own source, path and comment. Ensure that transmitting is legal at your location and that an antenna is connected.

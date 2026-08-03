@@ -27,17 +27,22 @@ int main() {
     const std::uint8_t tracker2[] = {'T','2'};
     const std::uint8_t ack[] = {'A'};
 
-    // A newer scheduled tracker replaces a stale queued position.
+    // A newer scheduled tracker replaces a stale queued position and keeps
+    // the same sequence so completion can be matched to the logical item.
+    std::uint32_t firstSequence = 0;
+    std::uint32_t replacedSequence = 0;
     assert(queue.enqueue(
         tracker1, sizeof(tracker1),
         Services::TxQueue::Source::Tracker,
         Services::TxQueue::Priority::Tracker,
-        100U, true));
+        100U, true, nullptr, nullptr, &firstSequence));
+    assert(firstSequence != 0U);
     assert(queue.enqueue(
         tracker2, sizeof(tracker2),
         Services::TxQueue::Source::Tracker,
         Services::TxQueue::Priority::Tracker,
-        200U, true));
+        200U, true, nullptr, nullptr, &replacedSequence));
+    assert(replacedSequence == firstSequence);
     assert(queue.stats().depth == 1U);
     assert(queue.stats().replaced == 1U);
 

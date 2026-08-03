@@ -22,7 +22,8 @@ bool TxQueue::enqueue(
     std::uint32_t now,
     bool replaceSameSource,
     const char* tagPeer,
-    const char* tagId) {
+    const char* tagId,
+    std::uint32_t* sequenceOut) {
 
     if (data == nullptr || length == 0 || length > LoRaProfile::MAX_PACKET_LENGTH) {
         ++stats_.drops;
@@ -41,6 +42,9 @@ bool TxQueue::enqueue(
             item.queuedAtMs = now;
             std::snprintf(item.tagPeer, sizeof(item.tagPeer), "%s", tagPeer != nullptr ? tagPeer : "");
             std::snprintf(item.tagId, sizeof(item.tagId), "%s", tagId != nullptr ? tagId : "");
+            if (sequenceOut != nullptr) {
+                *sequenceOut = item.sequence;
+            }
             ++stats_.replaced;
             return true;
         }
@@ -80,6 +84,10 @@ bool TxQueue::enqueue(
     item.sequence = nextSequence_++;
     std::snprintf(item.tagPeer, sizeof(item.tagPeer), "%s", tagPeer != nullptr ? tagPeer : "");
     std::snprintf(item.tagId, sizeof(item.tagId), "%s", tagId != nullptr ? tagId : "");
+
+    if (sequenceOut != nullptr) {
+        *sequenceOut = item.sequence;
+    }
 
     ++stats_.enqueued;
     stats_.depth = static_cast<std::uint8_t>(count_);

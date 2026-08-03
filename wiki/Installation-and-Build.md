@@ -55,9 +55,9 @@ Do not upload a filesystem image, bootloader image or partition-table binary thr
 
 ## OTA partition layout
 
-Firmware v2.7.5 and later uses two approximately 7 MB application slots in the 16 MB Flash partition table.
+Firmware v2.7.8 uses two 7 MB A/B application slots in the 16 MB Flash partition table.
 
-When upgrading from a build that used the previous single factory application partition, perform one complete USB upload first. Uploading only `firmware.bin` cannot change the partition table.
+When upgrading from v2.7.7 or any build that used the previous single factory application partition, perform one complete USB upload first. Uploading only `firmware.bin` cannot change the partition table.
 
 ## Recommended first validation
 
@@ -71,7 +71,9 @@ After upload, verify the serial log and then test:
 6. LoRa reception
 7. station detail and route analysis
 8. tracker/manual beacon
-9. Web OTA
+9. system heap/PSRAM/stack diagnostics and reset reason
+10. D/1-9+/I/? route badges
+11. Web OTA
 
 ## Native tests
 

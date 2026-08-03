@@ -696,6 +696,27 @@ bool pathTokenEquals(
     return true;
 }
 
+bool isInternetTransportToken(const std::uint8_t* token, std::size_t length) {
+    if (token == nullptr || length == 0) {
+        return false;
+    }
+    std::size_t normalizedLength = length;
+    if (normalizedLength > 0 && token[normalizedLength - 1] == '*') {
+        --normalizedLength;
+    }
+    if (normalizedLength >= 2) {
+        char first = static_cast<char>(token[0]);
+        char second = static_cast<char>(token[1]);
+        if (first >= 'a' && first <= 'z') first = static_cast<char>(first - 'a' + 'A');
+        if (second >= 'a' && second <= 'z') second = static_cast<char>(second - 'a' + 'A');
+        if (first == 'Q' && second == 'A') {
+            return true;
+        }
+    }
+    return pathTokenEquals(token, length, "TCPIP") ||
+        pathTokenEquals(token, length, "TCPXX");
+}
+
 bool isInternetPathToken(const std::uint8_t* token, std::size_t length) {
     std::size_t normalizedLength = length;
     if (normalizedLength > 0 && token[normalizedLength - 1] == '*') {
@@ -756,6 +777,9 @@ void parsePathData(
             ++tokenEnd;
         }
         const std::size_t tokenLength = static_cast<std::size_t>(tokenEnd - tokenBegin);
+        if (isInternetTransportToken(tokenBegin, tokenLength)) {
+            path.internetRouted = true;
+        }
         const bool used = tokenLength > 0 && tokenBegin[tokenLength - 1] == '*';
         if (used && !isInternetPathToken(tokenBegin, tokenLength)) {
             if (path.digipeaterHops < 255U) {
@@ -771,7 +795,7 @@ void parsePathData(
         }
         tokenBegin = tokenEnd < colon ? tokenEnd + 1 : colon;
     }
-    path.direct = path.digipeaterHops == 0;
+    path.direct = !path.internetRouted && path.digipeaterHops == 0;
 }
 
 bool parseTnc2Internal(
@@ -1031,6 +1055,7 @@ void encodeBase91Four(std::uint32_t value, char output[5]) {
 bool buildPositionTnc2(
     const char* callsign,
     const char* destination,
+    const char* path,
     double latitude,
     double longitude,
     char symbolTable,
@@ -1051,6 +1076,16 @@ bool buildPositionTnc2(
     }
 
     const char* safeComment = comment != nullptr ? comment : "";
+    const char* safePath = path != nullptr ? path : "";
+    for (const char* cursor = safePath; *cursor != '\0'; ++cursor) {
+        const char value = *cursor;
+        if (!((value >= 'A' && value <= 'Z') ||
+              (value >= '0' && value <= '9') ||
+              value == '-' || value == ',' || value == '*')) {
+            return false;
+        }
+    }
+    const char* pathSeparator = safePath[0] != '\0' ? "," : "";
     int written = -1;
 
     if (!compressed) {
@@ -1087,9 +1122,11 @@ bool buildPositionTnc2(
         written = std::snprintf(
             output,
             outputCapacity,
-            "%s>%s:!%02d%05.2f%c%c%03d%05.2f%c%c%s%s%s",
+            "%s>%s%s%s:=%02d%05.2f%c%c%03d%05.2f%c%c%s%s%s",
             callsign,
             destination,
+            pathSeparator,
+            safePath,
             latitudeDegrees,
             latitudeMinutes,
             latitudeHemisphere,
@@ -1102,6 +1139,16 @@ bool buildPositionTnc2(
             safeComment[0] != '\0' ? " " : "",
             safeComment);
     } else {
+        // Compressed APRS positions allow at most 40 comment characters.
+        // Keep the full configurable comment for the standard format and
+        // truncate only the compressed representation.
+        char compressedComment[COMPRESSED_POSITION_COMMENT_MAX + 1] = {};
+        std::strncpy(
+            compressedComment,
+            safeComment,
+            COMPRESSED_POSITION_COMMENT_MAX);
+        compressedComment[COMPRESSED_POSITION_COMMENT_MAX] = '\0';
+
         const double latitudeValueDouble = 380926.0 * (90.0 - latitude);
         const double longitudeValueDouble = 190463.0 * (180.0 + longitude);
         if (latitudeValueDouble < 0.0 || longitudeValueDouble < 0.0) {
@@ -1149,16 +1196,18 @@ bool buildPositionTnc2(
         written = std::snprintf(
             output,
             outputCapacity,
-            "%s>%s:!%c%s%s%c%s%s%s",
+            "%s>%s%s%s:=%c%s%s%c%s%s%s",
             callsign,
             destination,
+            pathSeparator,
+            safePath,
             symbolTable,
             encodedLatitude,
             encodedLongitude,
             symbolCode,
             courseSpeedType,
-            safeComment[0] != '\0' ? " " : "",
-            safeComment);
+            compressedComment[0] != '\0' ? " " : "",
+            compressedComment);
     }
 
     return written > 0 && static_cast<std::size_t>(written) < outputCapacity;

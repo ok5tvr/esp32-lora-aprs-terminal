@@ -8,9 +8,11 @@
 #include "services/geo_utils.h"
 #include "services/gps_service.h"
 #include "services/map_service.h"
+#include "services/ota_state.h"
 #include "services/power_service.h"
 #include "services/radio_service.h"
 #include "services/settings_service.h"
+#include "services/system_diagnostics_service.h"
 #include "services/trail_service.h"
 #include "services/tracker_service.h"
 #include "services/time_service.h"
@@ -30,11 +32,15 @@ public:
         void* digiIgateSaveContext,
         App::TrackerSettingsSaveHandler trackerSaveHandler,
         void* trackerSaveContext,
+        App::BeaconActionHandler beaconActionHandler,
+        void* beaconActionContext,
         App::MapPanHandler mapPanHandler,
         void* mapPanContext);
     void update(
         std::uint32_t now,
         const Services::RadioService::ViewState& radioState,
+        const Services::SystemDiagnosticsService::ViewState& diagnosticsState,
+        const Services::OtaViewState& otaState,
         const Services::MessageStore::ViewState& messageState,
         const Services::StationStore::ViewState& stationState,
         const Services::WeatherStore::ViewState& weatherState,
@@ -72,8 +78,12 @@ private:
     void* digiIgateSaveContext_ = nullptr;
     App::TrackerSettingsSaveHandler trackerSaveHandler_ = nullptr;
     void* trackerSaveContext_ = nullptr;
+    App::BeaconActionHandler beaconActionHandler_ = nullptr;
+    void* beaconActionContext_ = nullptr;
     Services::SettingsService::ViewState settingsState_;
     const Services::RadioService::ViewState* radioState_ = nullptr;
+    Services::SystemDiagnosticsService::ViewState diagnosticsState_;
+    Services::OtaViewState otaState_;
     Services::GpsService::ViewState gpsState_;
     const Services::StationStore::ViewState* stationState_ = nullptr;
     const Services::WeatherStore::ViewState* weatherState_ = nullptr;

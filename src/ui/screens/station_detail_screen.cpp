@@ -301,7 +301,32 @@ void update(
         ? station.path
         : App::Localization::text("bez cesty", "no path");
     char routeText[480] = {};
-    if (station.lastReceptionDirect) {
+    if (station.lastReceptionInternet) {
+        std::snprintf(
+            routeText,
+            sizeof(routeText),
+            App::Localization::text(
+                "APRS-IS | internetovy paket\nPrime %lu | opakovane %lu | internet %lu | posledni primy %s\nCesta: %s",
+                "APRS-IS | Internet packet\nDirect %lu | repeated %lu | Internet %lu | last direct %s\nPath: %s"),
+            static_cast<unsigned long>(station.directReceptionCount),
+            static_cast<unsigned long>(station.repeatedReceptionCount),
+            static_cast<unsigned long>(station.internetReceptionCount),
+            directAge,
+            pathText);
+        lv_obj_set_style_text_color(routeLabel, lv_color_hex(0x56C7FF), 0);
+    } else if (!station.lastRouteKnown) {
+        std::snprintf(
+            routeText,
+            sizeof(routeText),
+            App::Localization::text(
+                "CESTA NEZNAMA\nPrime %lu | opakovane %lu | posledni primy %s\nCesta: %s",
+                "ROUTE UNKNOWN\nDirect %lu | repeated %lu | last direct %s\nPath: %s"),
+            static_cast<unsigned long>(station.directReceptionCount),
+            static_cast<unsigned long>(station.repeatedReceptionCount),
+            directAge,
+            pathText);
+        lv_obj_set_style_text_color(routeLabel, lv_color_hex(0x92A7C7), 0);
+    } else if (station.lastReceptionDirect) {
         std::snprintf(
             routeText,
             sizeof(routeText),

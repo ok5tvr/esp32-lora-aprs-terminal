@@ -36,6 +36,56 @@ void styleRow(lv_obj_t* row, bool selectedRow) {
     lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 }
 
+void routeBadge(
+    const Services::StationStore::Station& station,
+    char* text,
+    std::size_t capacity,
+    std::uint32_t& color) {
+
+    if (station.lastReceptionInternet) {
+        std::snprintf(text, capacity, "I");
+        color = 0x56C7FF;
+    } else if (!station.lastRouteKnown) {
+        std::snprintf(text, capacity, "?");
+        color = 0x92A7C7;
+    } else if (station.lastReceptionDirect) {
+        std::snprintf(text, capacity, "D");
+        color = 0x42D392;
+    } else if (station.digipeaterHops > 9U) {
+        std::snprintf(text, capacity, "9+");
+        color = 0xFFB454;
+    } else {
+        std::snprintf(text, capacity, "%u", static_cast<unsigned>(station.digipeaterHops));
+        color = 0xFFB454;
+    }
+}
+
+lv_obj_t* createRouteBadge(
+    lv_obj_t* parent,
+    const Services::StationStore::Station& station) {
+
+    char marker[4] = {};
+    std::uint32_t color = 0x92A7C7;
+    routeBadge(station, marker, sizeof(marker), color);
+
+    lv_obj_t* badge = lv_obj_create(parent);
+    lv_obj_set_size(badge, 30, 24);
+    lv_obj_set_style_bg_color(badge, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(badge, LV_OPA_20, 0);
+    lv_obj_set_style_border_color(badge, lv_color_hex(color), 0);
+    lv_obj_set_style_border_width(badge, 1, 0);
+    lv_obj_set_style_radius(badge, 6, 0);
+    lv_obj_set_style_pad_all(badge, 0, 0);
+    lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t* label = lv_label_create(badge);
+    lv_label_set_text(label, marker);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(color), 0);
+    lv_obj_center(label);
+    return badge;
+}
+
 lv_obj_t* createStationRow(
     const Services::StationStore::Station& station,
     const Services::PositionReference& reference,
@@ -55,11 +105,14 @@ lv_obj_t* createStationRow(
 
     lv_obj_t* callLabel = lv_label_create(row);
     lv_label_set_text(callLabel, titleText);
-    lv_obj_set_width(callLabel, 350);
+    lv_obj_set_width(callLabel, 306);
     lv_label_set_long_mode(callLabel, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_font(callLabel, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_color(callLabel, lv_color_hex(0xF4F7FF), 0);
     lv_obj_align(callLabel, LV_ALIGN_TOP_LEFT, 0, 0);
+
+    lv_obj_t* route = createRouteBadge(row, station);
+    lv_obj_align(route, LV_ALIGN_TOP_RIGHT, -42, -1);
 
     lv_obj_t* symbolIcon = AprsIcons::create(
         row, station.symbol[0], station.symbol[1], station.hasPosition);

@@ -8,6 +8,8 @@
 
 #include "app_config.h"
 #include "app/tracker_symbols.h"
+#include "app/smartbeacon_profiles.h"
+#include "app/aprs_path.h"
 #include "app/localization.h"
 #include "app_log.h"
 
@@ -23,8 +25,14 @@ constexpr char KEY_TRAIL_ENABLED[] = "trailen";
 constexpr char KEY_TRACKER_SOURCE[] = "trksrc";
 constexpr char KEY_TRACKER_FORMAT[] = "trkfmt";
 constexpr char KEY_TRACKER_MODE[] = "trkmode";
+constexpr char KEY_TRACKER_SMART_PROFILE[] = "sbprof";
 constexpr char KEY_TRACKER_SYMBOL[] = "trksym";
+constexpr char KEY_TRACKER_PATH[] = "trkpath";
+constexpr char KEY_TRACKER_COMMENT[] = "trkcomm";
 constexpr char KEY_TRACKER_INTERVAL[] = "trkint";
+constexpr char KEY_BEACON_SOURCE[] = "beasrc";
+constexpr char KEY_BEACON_PATH[] = "beapath";
+constexpr char KEY_BEACON_COMMENT[] = "beacomm";
 constexpr char KEY_DIGI_ENABLED[] = "digien";
 constexpr char KEY_DIGI_MODE[] = "digimode";
 constexpr char KEY_DIGI_MAX[] = "digimax";
@@ -55,6 +63,14 @@ bool validFormat(std::uint8_t value) {
 
 bool validMode(std::uint8_t value) {
     return value <= static_cast<std::uint8_t>(App::TrackerBeaconMode::SmartBeacon);
+}
+
+bool validSmartProfile(std::uint8_t value) {
+    return value <= static_cast<std::uint8_t>(App::SmartBeaconProfile::Walking);
+}
+
+bool validPath(std::uint8_t value) {
+    return value <= static_cast<std::uint8_t>(App::AprsPath::Wide2_2);
 }
 
 
@@ -211,6 +227,14 @@ bool SettingsService::begin() {
     view_.loraCodingRate = LoRaProfile::CODING_RATE;
     view_.loraOutputPowerDbm = LoRaProfile::OUTPUT_POWER_DBM;
     view_.trackerFixedIntervalSeconds = AppConfig::TRACKER_DEFAULT_INTERVAL_SECONDS;
+    std::strncpy(
+        view_.trackerComment,
+        AppConfig::TRACKER_COMMENT,
+        sizeof(view_.trackerComment) - 1);
+    std::strncpy(
+        view_.beaconComment,
+        AppConfig::BEACON_COMMENT,
+        sizeof(view_.beaconComment) - 1);
     view_.digiMaxWideHops = 2;
     std::strncpy(
         view_.aprsIsServer,
@@ -311,9 +335,18 @@ bool SettingsService::begin() {
     const std::uint8_t modeValue = preferences.getUChar(
         KEY_TRACKER_MODE,
         static_cast<std::uint8_t>(App::TrackerBeaconMode::FixedInterval));
+    const std::uint8_t smartProfileValue = preferences.getUChar(
+        KEY_TRACKER_SMART_PROFILE,
+        static_cast<std::uint8_t>(App::SmartBeaconProfile::Car));
     const std::uint8_t symbolValue = preferences.getUChar(
         KEY_TRACKER_SYMBOL,
         static_cast<std::uint8_t>(App::TrackerSymbol::Car));
+    const std::uint8_t trackerPathValue = preferences.getUChar(
+        KEY_TRACKER_PATH,
+        static_cast<std::uint8_t>(App::AprsPath::Wide1_1));
+    const String trackerComment = preferences.getString(
+        KEY_TRACKER_COMMENT,
+        AppConfig::TRACKER_COMMENT);
     const std::uint32_t interval = preferences.getUInt(
         KEY_TRACKER_INTERVAL,
         AppConfig::TRACKER_DEFAULT_INTERVAL_SECONDS);
@@ -327,9 +360,25 @@ bool SettingsService::begin() {
     if (validMode(modeValue)) {
         view_.trackerMode = static_cast<App::TrackerBeaconMode>(modeValue);
     }
+    if (validSmartProfile(smartProfileValue)) {
+        view_.trackerSmartProfile = static_cast<App::SmartBeaconProfile>(smartProfileValue);
+    }
     const App::TrackerSymbol storedSymbol = static_cast<App::TrackerSymbol>(symbolValue);
     if (App::validTrackerSymbol(storedSymbol)) {
         view_.trackerSymbol = storedSymbol;
+    }
+    if (validPath(trackerPathValue)) {
+        view_.trackerPath = static_cast<App::AprsPath>(trackerPathValue);
+    }
+    if (!copyPrintable(
+            trackerComment.c_str(),
+            view_.trackerComment,
+            sizeof(view_.trackerComment),
+            false)) {
+        std::strncpy(
+            view_.trackerComment,
+            AppConfig::TRACKER_COMMENT,
+            sizeof(view_.trackerComment) - 1);
     }
     if (interval >= AppConfig::TRACKER_MIN_INTERVAL_SECONDS &&
         interval <= AppConfig::TRACKER_MAX_INTERVAL_SECONDS) {
@@ -342,6 +391,32 @@ bool SettingsService::begin() {
     if (view_.trackerSource == App::TrackerPositionSource::DefaultPosition &&
         view_.trackerMode == App::TrackerBeaconMode::SmartBeacon) {
         view_.trackerMode = App::TrackerBeaconMode::FixedInterval;
+    }
+
+    const std::uint8_t beaconSourceValue = preferences.getUChar(
+        KEY_BEACON_SOURCE,
+        static_cast<std::uint8_t>(App::TrackerPositionSource::DefaultPosition));
+    const std::uint8_t beaconPathValue = preferences.getUChar(
+        KEY_BEACON_PATH,
+        static_cast<std::uint8_t>(App::AprsPath::Wide1_1));
+    const String beaconComment = preferences.getString(
+        KEY_BEACON_COMMENT,
+        AppConfig::BEACON_COMMENT);
+    if (validSource(beaconSourceValue)) {
+        view_.beaconSource = static_cast<App::TrackerPositionSource>(beaconSourceValue);
+    }
+    if (validPath(beaconPathValue)) {
+        view_.beaconPath = static_cast<App::AprsPath>(beaconPathValue);
+    }
+    if (!copyPrintable(
+            beaconComment.c_str(),
+            view_.beaconComment,
+            sizeof(view_.beaconComment),
+            false)) {
+        std::strncpy(
+            view_.beaconComment,
+            AppConfig::BEACON_COMMENT,
+            sizeof(view_.beaconComment) - 1);
     }
 
     view_.digiEnabled = preferences.getBool(KEY_DIGI_ENABLED, false);
@@ -557,7 +632,10 @@ bool SettingsService::saveTracker(
     App::TrackerPositionSource source,
     App::TrackerPositionFormat format,
     App::TrackerBeaconMode mode,
+    App::SmartBeaconProfile smartProfile,
     App::TrackerSymbol symbol,
+    App::AprsPath path,
+    const char* comment,
     std::uint32_t fixedIntervalSeconds,
     char* errorText,
     std::size_t errorTextCapacity) {
@@ -573,11 +651,35 @@ bool SettingsService::saveTracker(
                 : "Interval musi byt 30 az 3600 sekund.");
         return false;
     }
+    if (!App::validSmartBeaconProfile(smartProfile)) {
+        setError(
+            errorText,
+            errorTextCapacity,
+            english ? "Invalid SmartBeacon profile." : "Neplatny profil SmartBeaconingu.");
+        return false;
+    }
     if (!App::validTrackerSymbol(symbol)) {
         setError(
             errorText,
             errorTextCapacity,
             english ? "Invalid tracker APRS symbol." : "Neplatny APRS symbol trackeru.");
+        return false;
+    }
+    if (!App::validAprsPath(path)) {
+        setError(
+            errorText,
+            errorTextCapacity,
+            english ? "Invalid APRS path." : "Neplatna APRS cesta.");
+        return false;
+    }
+    char normalizedComment[APRS_COMMENT_CAPACITY] = {};
+    if (!copyPrintable(comment, normalizedComment, sizeof(normalizedComment), false)) {
+        setError(
+            errorText,
+            errorTextCapacity,
+            english
+                ? "Comment must contain 1 to 48 printable characters."
+                : "Komentar musi obsahovat 1 az 48 tisknutelnych znaku.");
         return false;
     }
     if (source == App::TrackerPositionSource::DefaultPosition &&
@@ -611,16 +713,25 @@ bool SettingsService::saveTracker(
     const bool modeSaved = preferences.putUChar(
         KEY_TRACKER_MODE,
         static_cast<std::uint8_t>(mode)) > 0;
+    const bool smartProfileSaved = preferences.putUChar(
+        KEY_TRACKER_SMART_PROFILE,
+        static_cast<std::uint8_t>(smartProfile)) > 0;
     const bool symbolSaved = preferences.putUChar(
         KEY_TRACKER_SYMBOL,
         static_cast<std::uint8_t>(symbol)) > 0;
+    const bool pathSaved = preferences.putUChar(
+        KEY_TRACKER_PATH,
+        static_cast<std::uint8_t>(path)) > 0;
+    const bool commentSaved = preferences.putString(
+        KEY_TRACKER_COMMENT,
+        normalizedComment) > 0;
     const bool intervalSaved = preferences.putUInt(
         KEY_TRACKER_INTERVAL,
         fixedIntervalSeconds) > 0;
     preferences.end();
 
     if (!enabledSaved || !trailEnabledSaved || !sourceSaved || !formatSaved || !modeSaved ||
-        !symbolSaved || !intervalSaved) {
+        !smartProfileSaved || !symbolSaved || !pathSaved || !commentSaved || !intervalSaved) {
         setError(
             errorText,
             errorTextCapacity,
@@ -635,21 +746,106 @@ bool SettingsService::saveTracker(
     view_.trackerSource = source;
     view_.trackerFormat = format;
     view_.trackerMode = mode;
+    view_.trackerSmartProfile = smartProfile;
     view_.trackerSymbol = symbol;
+    view_.trackerPath = path;
+    std::strncpy(view_.trackerComment, normalizedComment, sizeof(view_.trackerComment) - 1);
+    view_.trackerComment[sizeof(view_.trackerComment) - 1] = '\0';
     view_.trackerFixedIntervalSeconds = fixedIntervalSeconds;
     view_.persistentStorageReady = true;
     ++view_.revision;
     setError(errorText, errorTextCapacity, "");
     LOG_I(
         "SETTINGS",
-        "Tracker saved: %s trail=%s source=%u format=%u mode=%u symbol=%u interval=%u",
+        "Tracker saved: %s trail=%s source=%u format=%u mode=%u profile=%u symbol=%u path=%s interval=%u comment=%s",
         enabled ? "enabled" : "disabled",
         trailEnabled ? "enabled" : "disabled",
         static_cast<unsigned>(source),
         static_cast<unsigned>(format),
         static_cast<unsigned>(mode),
+        static_cast<unsigned>(smartProfile),
         static_cast<unsigned>(symbol),
-        static_cast<unsigned>(fixedIntervalSeconds));
+        App::aprsPathLabel(path),
+        static_cast<unsigned>(fixedIntervalSeconds),
+        view_.trackerComment);
+    return true;
+}
+
+bool SettingsService::saveBeacon(
+    App::TrackerPositionSource source,
+    App::AprsPath path,
+    const char* comment,
+    char* errorText,
+    std::size_t errorTextCapacity) {
+
+    const bool english = view_.uiLanguage == App::UiLanguage::English;
+    if (!validSource(static_cast<std::uint8_t>(source))) {
+        setError(
+            errorText,
+            errorTextCapacity,
+            english ? "Invalid beacon position source." : "Neplatny zdroj polohy beaconu.");
+        return false;
+    }
+    if (!App::validAprsPath(path)) {
+        setError(
+            errorText,
+            errorTextCapacity,
+            english ? "Invalid APRS path." : "Neplatna APRS cesta.");
+        return false;
+    }
+    char normalizedComment[APRS_COMMENT_CAPACITY] = {};
+    if (!copyPrintable(comment, normalizedComment, sizeof(normalizedComment), false)) {
+        setError(
+            errorText,
+            errorTextCapacity,
+            english
+                ? "Comment must contain 1 to 48 printable characters."
+                : "Komentar musi obsahovat 1 az 48 tisknutelnych znaku.");
+        return false;
+    }
+
+    Preferences preferences;
+    if (!preferences.begin(NVS_NAMESPACE, false)) {
+        setError(
+            errorText,
+            errorTextCapacity,
+            english ? "Cannot open NVS for writing." : "Nelze otevrit NVS pro zapis.");
+        return false;
+    }
+    const bool sourceSaved = preferences.putUChar(
+        KEY_BEACON_SOURCE,
+        static_cast<std::uint8_t>(source)) > 0;
+    const bool pathSaved = preferences.putUChar(
+        KEY_BEACON_PATH,
+        static_cast<std::uint8_t>(path)) > 0;
+    const bool commentSaved = preferences.putString(
+        KEY_BEACON_COMMENT,
+        normalizedComment) > 0;
+    preferences.end();
+
+    if (!sourceSaved || !pathSaved || !commentSaved) {
+        setError(
+            errorText,
+            errorTextCapacity,
+            english
+                ? "Saving beacon settings to NVS failed."
+                : "Ulozeni beaconu do NVS se nepodarilo.");
+        return false;
+    }
+
+    view_.beaconSource = source;
+    view_.beaconPath = path;
+    std::strncpy(view_.beaconComment, normalizedComment, sizeof(view_.beaconComment) - 1);
+    view_.beaconComment[sizeof(view_.beaconComment) - 1] = '\0';
+    view_.persistentStorageReady = true;
+    ++view_.revision;
+    setError(errorText, errorTextCapacity, "");
+    LOG_I(
+        "SETTINGS",
+        "Beacon saved: source=%u path=%s comment=%s",
+        static_cast<unsigned>(source),
+        App::aprsPathLabel(path),
+        view_.beaconComment);
     return true;
 }
 

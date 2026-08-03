@@ -15,11 +15,12 @@ lib/AprsCore  hardware-independent APRS functions
 The single-threaded application is intentionally scheduled so radio handling remains early:
 
 1. LVGL and hardware buttons
-2. GPS input
-3. LoRa RX/TX and APRS processing
-4. APRS tracker scheduling
-5. Trail logger state and SD storage
-6. visible-screen refresh
+2. GPS input and RTC synchronization
+3. LoRa RX/TX, APRS parsing, DIGI and iGate networking
+4. Web OTA/AP+STA maintenance
+5. power, tracker, Trail logger, astronomy and map services
+6. system diagnostics sampling
+7. visible-screen refresh
 
 ## SPI allocation
 
@@ -85,3 +86,11 @@ Protocol data and serial-only debug strings do not require translation.
 User-facing English Wiki source lives in `/wiki`. Changes pushed to the configured branch are synchronized to the GitHub Wiki by `.github/workflows/publish-wiki.yml`.
 
 See `docs/GITHUB_WIKI.md` for one-time repository setup and local publishing options.
+
+## Stabilization services in v2.7.8
+
+`SystemDiagnosticsService` samples internal heap, largest blocks, historical minimum heap, PSRAM, loop-task stack reserve, uptime and the ESP32 reset reason. The UI receives a small snapshot once per second.
+
+`OtaService` writes only to the inactive A/B application slot. It validates the ESP32 image header and application descriptor before starting Flash writes. Invalid or interrupted uploads are aborted without scheduling a restart. The iGate Wi-Fi path preserves AP+STA mode so APRS-IS reconnects do not remove the OTA access point.
+
+APRS path parsing classifies direct RF, used RF digipeaters and Internet transport separately. The fixed-size station store therefore supports D/hop/I/? badges without dynamic allocation.

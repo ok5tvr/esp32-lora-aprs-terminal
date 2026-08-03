@@ -54,6 +54,8 @@ bool RadioService::begin(const SettingsService::ViewState& settings) {
     lastTxCompletedAt_ = 0;
     observedCompletedTransmissions_ = 0;
     wasTransmitting_ = false;
+    activeTxItem_ = TxQueue::Item{};
+    activeTxValid_ = false;
     lastRecoveryAttemptAt_ = 0;
     observedTransmitTimeouts_ = 0;
     const std::uint32_t now = millis();
@@ -445,7 +447,8 @@ bool RadioService::sendTestPacket(const char* callsign, std::uint32_t now) {
 bool RadioService::queueTrackerPacket(
     const char* frame,
     bool manual,
-    std::uint32_t now) {
+    std::uint32_t now,
+    std::uint32_t* sequenceOut) {
 
     if (frame == nullptr) {
         return false;
@@ -456,7 +459,10 @@ bool RadioService::queueTrackerPacket(
         manual ? TxQueue::Source::ManualBeacon : TxQueue::Source::Tracker,
         manual ? TxQueue::Priority::ManualBeacon : TxQueue::Priority::Tracker,
         now,
-        !manual);
+        !manual,
+        nullptr,
+        nullptr,
+        sequenceOut);
 }
 
 bool RadioService::sendTnc2(const char* frame, std::uint32_t now) {
@@ -471,7 +477,8 @@ bool RadioService::enqueueTnc2Bytes(
     std::uint32_t now,
     bool replaceSameSource,
     const char* tagPeer,
-    const char* tagId) {
+    const char* tagId,
+    std::uint32_t* sequenceOut) {
 
     if (frame == nullptr || frameLength == 0) {
         return false;
@@ -498,7 +505,8 @@ bool RadioService::enqueueTnc2Bytes(
         now,
         replaceSameSource,
         tagPeer,
-        tagId);
+        tagId,
+        sequenceOut);
     if (queued) {
         char printable[180] = {};
         const std::size_t copyLength = frameLength < sizeof(printable) - 1
@@ -571,10 +579,25 @@ void RadioService::observeDriverEvents(std::uint32_t now) {
     const Drivers::Sx1278Driver::Status& status = driver_.status();
     const bool transmitting = status.mode == Drivers::Sx1278Driver::Mode::Transmitting;
     const std::uint32_t completed = status.transmittedPackets;
-    if ((wasTransmitting_ && !transmitting) ||
-        completed != observedCompletedTransmissions_) {
+    const bool completedSuccessfully = completed != observedCompletedTransmissions_;
+    const bool transmissionEnded = wasTransmitting_ && !transmitting;
+
+    if (activeTxValid_ && completedSuccessfully) {
+        lastTxCompletedAt_ = now;
+        onTransmissionCompleted(activeTxItem_, now);
+        activeTxItem_ = TxQueue::Item{};
+        activeTxValid_ = false;
+    } else if (activeTxValid_ && transmissionEnded) {
+        // The radio left TX without incrementing the completed counter. This
+        // includes TX timeout and finishTransmit failures.
+        lastTxCompletedAt_ = now;
+        onTransmissionFailed(activeTxItem_, now);
+        activeTxItem_ = TxQueue::Item{};
+        activeTxValid_ = false;
+    } else if (transmissionEnded || completedSuccessfully) {
         lastTxCompletedAt_ = now;
     }
+
     observedCompletedTransmissions_ = completed;
     wasTransmitting_ = transmitting;
 }
@@ -667,6 +690,8 @@ void RadioService::serviceTxQueue(std::uint32_t now) {
     if (txQueue_.pop(index, started)) {
         lastTxStartedAt_ = now;
         wasTransmitting_ = true;
+        activeTxItem_ = started;
+        activeTxValid_ = true;
         view_.lastTxAtMs = now;
         std::snprintf(
             view_.lastTxSource,
@@ -696,6 +721,34 @@ void RadioService::onTransmissionStarted(
 
     LOG_I("TXQ", "%s started, %u bytes", TxQueue::sourceName(item.source),
           static_cast<unsigned>(item.length));
+}
+
+void RadioService::onTransmissionCompleted(
+    const TxQueue::Item& item,
+    std::uint32_t now) {
+
+    view_.lastCompletedTxSequence = item.sequence;
+    ++view_.txCompletionRevision;
+    LOG_I(
+        "TXQ",
+        "%s completed, sequence %lu at %lu ms",
+        TxQueue::sourceName(item.source),
+        static_cast<unsigned long>(item.sequence),
+        static_cast<unsigned long>(now));
+}
+
+void RadioService::onTransmissionFailed(
+    const TxQueue::Item& item,
+    std::uint32_t now) {
+
+    view_.lastFailedTxSequence = item.sequence;
+    ++view_.txFailureRevision;
+    LOG_E(
+        "TXQ",
+        "%s failed, sequence %lu at %lu ms",
+        TxQueue::sourceName(item.source),
+        static_cast<unsigned long>(item.sequence),
+        static_cast<unsigned long>(now));
 }
 
 const char* RadioService::recoveryReasonText() const {

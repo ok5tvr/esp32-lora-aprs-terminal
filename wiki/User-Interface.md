@@ -2,7 +2,7 @@
 
 ## Main menu
 
-Firmware v2.7.7 uses this menu order:
+Firmware v2.7.11 uses this menu order:
 
 1. LoRa APRS
 2. Received stations
@@ -10,13 +10,14 @@ Firmware v2.7.7 uses this menu order:
 4. Weather stations
 5. Map
 6. Tracker
-7. Trail logger
-8. DIGI / iGate
-9. GPS receiver
-10. Astronomy
-11. Diagnostics
-12. Power
-13. Settings
+7. Beacon
+8. Trail logger
+9. DIGI / iGate
+10. GPS receiver
+11. Astronomy
+12. Diagnostics
+13. Power
+14. Settings
 
 ## Navigation controls
 
@@ -51,6 +52,10 @@ A blue RF indicator and badge show newly inserted APRS stations, objects or item
 - grey: periodic tracker disabled
 - amber: enabled but waiting for a usable position
 - green: active scheduling with a valid position
+
+### Beacon
+
+The dedicated Beacon page prepares and sends one position packet. Choose GPS or the saved default position, select `DIRECT`, `WIDE1-1` or `WIDE2-2`, edit the comment, then use **Send beacon now**. Pressing the physical OK control on this screen also sends the beacon.
 
 ### Trail logger
 
@@ -92,3 +97,14 @@ The right side of normal screen headers shows battery percentage, battery voltag
 Open **Settings > Interface language** and choose Czech or English. The active screen is rebuilt immediately after saving; a restart is not required.
 
 Protocol data such as callsigns, APRS frames, NMEA sentences and units are intentionally not translated.
+
+## Received-station route badges
+
+Each row in **Received stations** includes a compact route marker:
+
+- **D**: latest reception was direct RF
+- **1** through **9+**: number of used RF digipeater path elements
+- **I**: APRS-IS/Internet-routed path such as `TCPIP`, `TCPXX` or `qA...`
+- **?**: the route could not be classified
+
+Open the station detail for the complete path, last used digipeater and separate direct/repeated/Internet reception counters.

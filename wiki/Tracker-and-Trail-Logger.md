@@ -13,7 +13,10 @@ The Tracker page allows selection of:
 - GPS or saved default position
 - normal or compressed APRS position
 - fixed interval or SmartBeacon scheduling
+- SmartBeacon profile: **Car**, **Bicycle** or **Walking**
 - APRS symbol
+- APRS path: `DIRECT`, `WIDE1-1` or `WIDE2-2`
+- printable APRS comment, maximum 48 characters; compressed packets transmit the first 40 characters
 - Trail logger enable state
 
 ### Available symbols
@@ -34,7 +37,7 @@ The Tracker page allows selection of:
 
 ### Manual BOOT beacon
 
-A short BOOT-button press requests one position beacon even when periodic tracking is disabled.
+A short BOOT-button press requests one position beacon even when periodic tracking is disabled. The packet uses the saved Tracker source, format, symbol, path and comment.
 
 - GPS source: waits up to 15 seconds for a current fix
 - Default source: uses saved coordinates immediately
@@ -44,9 +47,19 @@ The first BOOT press after full display blanking only wakes the display.
 
 ## SmartBeacon
 
-SmartBeacon changes the beacon interval according to speed and heading changes. It reduces unnecessary packets while stationary and increases position updates during movement or turns.
+SmartBeacon changes the beacon interval according to speed and heading changes. Version 2.7.11 provides three tuned profiles:
 
-Use a conservative configuration appropriate for the shared LoRa APRS channel.
+| Profile | Low / high speed | Slow / fast interval | Movement behaviour |
+|---|---:|---:|---|
+| Car | 5 / 70 km/h | 30 min / 2 min | start after 8 s above 6 km/h; stop after 45 s below 3 km/h |
+| Bicycle | 3 / 30 km/h | 20 min / 90 s | start after 6 s above 4 km/h; stop after 30 s below 2 km/h |
+| Walking | 1.5 / 7 km/h | 15 min / 2 min | start after 10 s above 2 km/h; stop after 60 s below 0.7 km/h |
+
+Each profile also changes corner sensitivity and minimum turn time. Course data at unreliable near-zero speed are ignored. Start and stop conditions must remain stable for the listed confirmation time, which prevents GPS jitter from generating extra packets.
+
+The SmartBeacon timer is updated only after the radio confirms a completed RF transmission. Queueing a packet does not count as a transmission. Failed or unconfirmed packets are retried after a short delay.
+
+The Tracker page shows the reason for the last completed beacon: initial, fixed interval, speed interval, corner, start moving, stopped or manual.
 
 ## Trail logger
 

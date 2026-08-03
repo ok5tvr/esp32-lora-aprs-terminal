@@ -58,6 +58,24 @@ The graph is not a calibrated spectrum analyser or channel-occupancy measurement
 
 The radio diagnostics history remains in RAM and resets after reboot. It is cleared when the active RF profile changes so different frequencies are not mixed.
 
+
+## System diagnostics in v2.7.8
+
+The Diagnostics page also refreshes these values once per second:
+
+- free internal heap
+- largest contiguous internal block
+- historical minimum free heap
+- free PSRAM
+- minimum observed free `loopTask` stack reserve
+- uptime
+- last ESP32 reset reason
+- station-store occupancy
+- TX queue depth/high-water mark
+- current OTA state and connected client count
+
+Internal heap below 32 KB and stack reserve below 2 KB are highlighted. Missing PSRAM is also visible. Use the historical minimum values while repeatedly opening screens or receiving stations to identify memory regressions.
+
 ## Automatic recovery
 
 The firmware reinitializes only the SX1278 path after:
